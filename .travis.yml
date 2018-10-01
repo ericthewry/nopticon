@@ -12,4 +12,4 @@ matrix:
 
 script:
   - mkdir -p build
-  - ${CXX} --std=c++11 -Wall -o build/run-test -I./src test/*.cc && ./build/run-test
+  - ${CXX} --std=c++11 -Wall -o build/run-test -I./src src/*.cc test/*.cc && ./build/run-test
