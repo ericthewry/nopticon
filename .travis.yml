@@ -1,0 +1,16 @@
+language: cpp
+sudo: false
+
+matrix:
+  include:
+    - os: osx
+      compiler: clang
+
+    - os: linux
+      dist: trusty
+      compiler: clang
+
+script:
+  - mkdir -p build
+  - ${COMPILER} --version
+  - ${COMPILER} --std=c++11 -Wall -o build/run-test -I./src test/*.cc && ./build/run-test
