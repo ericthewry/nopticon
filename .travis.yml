@@ -13,3 +13,4 @@ matrix:
 script:
   - mkdir -p build
   - ${CXX} --std=c++11 -Wall -o build/run-test -I./src src/*.cc test/*.cc && ./build/run-test
+  - ${CXX} --std=c++11 -Wall -o build/gobgp-analysis -I./deps/rapidjson/include -I./src src/*.cc cmd/*.cc && ./test/gobgp-analysis-test.sh
