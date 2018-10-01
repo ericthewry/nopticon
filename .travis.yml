@@ -12,5 +12,4 @@ matrix:
 
 script:
   - mkdir -p build
-  - ${COMPILER} --version
-  - ${COMPILER} --std=c++11 -Wall -o build/run-test -I./src test/*.cc && ./build/run-test
+  - ${CXX} --std=c++11 -Wall -o build/run-test -I./src test/*.cc && ./build/run-test
