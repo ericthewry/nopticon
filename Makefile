@@ -49,3 +49,5 @@ mk_build_dir:
 clean:
 	rm -rf ${BUILD_DIR}
 
+format:
+	clang-format -i ${SRC} ${SRC_HEADER} ${TEST} ${TEST_HEADER}
