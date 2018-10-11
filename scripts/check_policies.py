@@ -1,23 +1,22 @@
 #!/usr/bin/python3
 
 """
-List edges contained in a network summary
+Check whether all intents appear in a network summary
 """
 
 from argparse import ArgumentParser
 import ipaddress
 import json
-from nopticon import NetworkSummary
+from nopticon import *
 
 def check_reachability(policy, summary):
-    assert(policy['type'] == 'reachability')
-    flow = ipaddress.ip_network(policy['flow'])
-    edge = (policy['source'], policy['target'])
-    if flow not in summary.get_edges():
+    assert(isinstance(policy, ReachabilityPolicy))
+    edge = (policy._source, policy._target)
+    if policy._flow not in summary.get_edges():
         return -1
-    if edge not in summary.get_edges()[flow]:
+    if edge not in summary.get_edges()[policy._flow]:
         return -1
-    edge_details = summary.get_edges()[flow][edge]
+    edge_details = summary.get_edges()[policy._flow][edge]
     return edge_details['rank-0']
 
 def main():
@@ -37,11 +36,11 @@ def main():
     # Load policies
     with open(settings.policies_path, 'r') as pf:
         policies_json = pf.read()
-    policies = json.loads(policies_json)
+    policies = parse_policies(policies_json)
 
-    for policy in policies['policies']:
-        if policy['type'] == 'reachability':
-            print('%s %s->%s %f' % (policy['flow'], policy['source'], policy['target'], check_reachability(policy, summary)))
+    for policy in policies:
+        if isinstance(policy, ReachabilityPolicy):
+            print('%s %f' % (policy, check_reachability(policy, summary)))
 
 if __name__ == '__main__':
     main()
