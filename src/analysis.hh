@@ -55,8 +55,8 @@ public:
                                              1} {
     assert(1 < exponent and exponent <= 12);
     assert(std::is_sorted(spans.begin(), spans.end()));
-    for (auto duration : spans) {
-      m_slices.emplace_back(duration);
+    for (auto span : spans) {
+      m_slices.emplace_back(span);
     }
   }
 
@@ -65,6 +65,9 @@ public:
 
   /// Mark the time at which a property stops to hold
   void stop(timestamp_t);
+
+  /// Reset each slice
+  void reset() noexcept;
 
   /// Ordered according to their span, from shortest to longest
   const slices_t &slices() const noexcept { return m_slices; }
@@ -92,6 +95,8 @@ public:
   const std::size_t number_of_nodes;
   network_summary_t(std::size_t);
   network_summary_t(const spans_t &, std::size_t);
+
+  void reset() noexcept;
 
   /// Ordered according to their span, from longest to shortest
   const slices_t &slices(flow_id_t, nid_t, nid_t) const;
@@ -128,6 +133,8 @@ public:
   bool ok() const noexcept { return m_loops_per_flow.empty(); }
 
   const flow_graph_t &flow_graph() const noexcept { return m_flow_graph; }
+
+  void reset_network_summary() noexcept { m_network_summary.reset(); }
 
   const network_summary_t &network_summary() const noexcept {
     return m_network_summary;

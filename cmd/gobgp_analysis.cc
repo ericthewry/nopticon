@@ -13,6 +13,7 @@
 #include <limits>
 #include <unordered_map>
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -22,9 +23,6 @@
 
 typedef std::unordered_map<std::string, nopticon::nid_t> string_to_nid_t;
 typedef std::vector<std::string> nid_to_name_t;
-
-typedef uint64_t rev_t;
-typedef std::vector<rev_t> rev_vec_t;
 
 std::string ipv4_format(nopticon::ip_addr_t ip_addr) {
   std::ostringstream sstream;
@@ -43,21 +41,18 @@ std::string ipv4_format(const nopticon::ip_prefix_t &ip_prefix) {
   return sstream.str();
 }
 
-enum class opcode_t : unsigned { INSERT_OR_ASSIGN = 0, PURGE };
-
 class log_t {
 public:
   log_t(std::streambuf *buffer, const nid_to_name_t &nid_to_name,
         unsigned opt_verbosity, bool opt_node_ids, float opt_rank_threshold,
         const nopticon::spans_t opt_network_summary_spans)
       : m_ostream(buffer), m_nid_to_name(nid_to_name),
-        m_rev_vec(nid_to_name.size()), m_opt_node_ids{opt_node_ids},
+        m_opt_node_ids{opt_node_ids},
         m_opt_rank_threshold{opt_rank_threshold},
         m_opt_verbosity{opt_verbosity}, m_opt_network_summary_spans{
                                             opt_network_summary_spans} {}
-  void print(const nopticon::analysis_t &, opcode_t,
-             const nopticon::ip_prefix_t &, nopticon::source_t,
-             const nopticon::target_t &, nopticon::timestamp_t);
+
+  void print(const nopticon::analysis_t &, bool ignore_verbosity);
 
   const nopticon::spans_t &opt_network_summary_spans() const noexcept {
     return m_opt_network_summary_spans;
@@ -65,10 +60,6 @@ public:
 
 private:
   typedef rapidjson::Writer<rapidjson::StringBuffer> writer_t;
-
-  void print_update(writer_t &, opcode_t, const nopticon::ip_prefix_t &,
-                    nopticon::source_t, const nopticon::target_t &,
-                    nopticon::timestamp_t);
 
   void print_flows(writer_t &, const nopticon::flow_tree_t &) const;
   void print_flows(writer_t &, const nopticon::affected_flows_t &) const;
@@ -87,7 +78,6 @@ private:
 
   std::ostream m_ostream;
   const nid_to_name_t &m_nid_to_name;
-  rev_vec_t m_rev_vec;
 
   bool m_opt_node_ids;
   float m_opt_rank_threshold;
@@ -101,30 +91,6 @@ void log_t::print_nid(writer_t &writer, nopticon::nid_t nid) const {
   } else {
     writer.String(m_nid_to_name.at(nid));
   }
-}
-
-void log_t::print_update(writer_t &writer, opcode_t opcode,
-                         const nopticon::ip_prefix_t &ip_prefix,
-                         nopticon::source_t source,
-                         const nopticon::target_t &target,
-                         nopticon::timestamp_t origin_timestamp) {
-  writer.Key("update");
-  writer.StartObject();
-  writer.Key("opcode");
-  writer.Uint(static_cast<unsigned>(opcode));
-  writer.Key("rev");
-  writer.Uint64(m_rev_vec.at(source)++);
-  writer.Key("source");
-  print_nid(writer, source);
-  writer.Key("target");
-  writer.StartArray();
-  for (auto t : target) {
-    print_nid(writer, t);
-  }
-  writer.EndArray();
-  writer.Key("origin-timestamp");
-  writer.Uint64(origin_timestamp);
-  writer.EndObject();
 }
 
 void log_t::print_flow(writer_t &writer,
@@ -214,7 +180,7 @@ void log_t::print_network_summary(
       }
       auto &slices = network_summary.slices(flow->id, s, t);
       if (slices.size() == 2) {
-        auto distance = std::abs(slices.front().rank - slices.back().rank);
+        auto distance = std::fabs(slices.front().rank - slices.back().rank);
         if (distance < m_opt_rank_threshold) {
           continue;
         }
@@ -306,10 +272,7 @@ void log_t::print_errors(
   }
 }
 
-void log_t::print(const nopticon::analysis_t &analysis, opcode_t opcode,
-                  const nopticon::ip_prefix_t &ip_prefix,
-                  nopticon::source_t source, const nopticon::target_t &target,
-                  nopticon::timestamp_t origin_timestamp) {
+void log_t::print(const nopticon::analysis_t &analysis, bool ignore_verbosity) {
   rapidjson::StringBuffer s;
   writer_t writer{s};
   writer.StartObject();
@@ -327,23 +290,20 @@ void log_t::print(const nopticon::analysis_t &analysis, opcode_t opcode,
     writer.EndArray();
   }
   if (not m_opt_network_summary_spans.empty()) {
-    if (m_opt_verbosity >= 7) {
+    if (ignore_verbosity or m_opt_verbosity >= 7) {
       print_network_summary(writer, analysis.flow_graph().flow_tree(),
                             analysis.network_summary());
-    } else if (m_opt_verbosity >= 5) {
+    } else if (ignore_verbosity or m_opt_verbosity >= 5) {
       print_network_summary(writer, analysis.affected_flows(),
                             analysis.network_summary());
     }
   }
-  if (m_opt_verbosity >= 6) {
+  if (ignore_verbosity or m_opt_verbosity >= 6) {
     print_flows(writer, analysis.flow_graph().flow_tree());
-  } else if (m_opt_verbosity >= 4) {
+  } else if (ignore_verbosity or m_opt_verbosity >= 4) {
     print_flows(writer, analysis.affected_flows());
   }
-  if (m_opt_verbosity >= 3 or not analysis.ok()) {
-    print_update(writer, opcode, ip_prefix, source, target, origin_timestamp);
-  }
-  if (m_opt_verbosity >= 1) {
+  if (ignore_verbosity or m_opt_verbosity >= 1) {
     print_errors(writer, analysis.loops_per_flow());
   }
   writer.EndObject();
@@ -416,6 +376,26 @@ nopticon::ip_prefix_t make_ip_prefix(const std::string &ip_prefix) {
   return {};
 }
 
+enum class cmd_t : uint8_t {
+   RESET_NETWORK_SUMMARY = 0,
+   PRINT_LOG,
+};
+
+void process_cmd(nopticon::analysis_t &analysis, log_t& log, rapidjson::Document &document) {
+  assert(document["Command"].IsUint());
+  auto cmd = static_cast<cmd_t>(document["Command"].GetInt());
+  switch (cmd) {
+     case cmd_t::RESET_NETWORK_SUMMARY:
+       analysis.reset_network_summary();
+       break;
+     case cmd_t::PRINT_LOG:
+       log.print(analysis, true);
+       break;
+     default:
+       std::cerr << "Unsupported gobgp-analysis command: " << static_cast<unsigned>(cmd) << std::endl;
+  }
+}
+
 void process_bmp_message(std::size_t number_of_nodes, FILE *file,
                          const string_to_nid_t &ip_to_nid, log_t &log) {
   assert(file != nullptr);
@@ -426,6 +406,10 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
   rapidjson::Document document;
   while (not document.ParseStream<rapidjson::kParseStopWhenDoneFlag>(input)
                  .HasParseError()) {
+    if (document.HasMember("Command")) {
+       process_cmd(analysis, log, document);
+       continue;
+    }
     assert(document.HasMember("Header"));
     assert(document["Header"].HasMember("Type"));
     assert(document["Header"]["Type"].IsUint());
@@ -451,12 +435,12 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
 
     auto &peer_header = document["PeerHeader"];
     auto peer_bgpid = peer_header["PeerBGPID"].GetString();
-    nopticon::timestamp_t origin_timestamp;
+    nopticon::timestamp_t timestamp;
     if (peer_header["Timestamp"].IsUint()) {
-      origin_timestamp = peer_header["Timestamp"].GetUint();
+      timestamp = peer_header["Timestamp"].GetUint();
     } else {
       assert(peer_header["Timestamp"].IsDouble());
-      origin_timestamp = static_cast<nopticon::timestamp_t>(
+      timestamp = static_cast<nopticon::timestamp_t>(
           peer_header["Timestamp"].GetDouble());
     }
     auto &body = document["Body"];
@@ -483,9 +467,8 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
         auto ip_prefix = make_ip_prefix(nlri_value["prefix"].GetString());
         auto target = ip_to_nid.at(next_hop);
         analysis.insert_or_assign(ip_prefix, source, {target},
-                                  origin_timestamp);
-        log.print(analysis, opcode_t::INSERT_OR_ASSIGN, ip_prefix, source,
-                  {target}, origin_timestamp);
+                                  timestamp);
+        log.print(analysis, false);
       }
     }
     auto &withdrawn_routes = bgp_update_body["WithdrawnRoutes"];
@@ -493,9 +476,8 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
     for (auto &withdrawn_route : withdrawn_routes.GetArray()) {
       assert(withdrawn_route.HasMember("prefix"));
       auto ip_prefix = make_ip_prefix(withdrawn_route["prefix"].GetString());
-      analysis.erase(ip_prefix, source, origin_timestamp);
-      log.print(analysis, opcode_t::PURGE, ip_prefix, source, {},
-                origin_timestamp);
+      analysis.erase(ip_prefix, source, timestamp);
+      log.print(analysis, false);
     }
   }
 }
@@ -546,7 +528,6 @@ static const char *const s_usage =
     "  \tVERBOSITY (from low to high) is as follows:\n"
     "  \t0 - perform analysis but produce no output\n"
     "  \t1 - BMP messages that cause forwarding loops\n"
-    "  \t3 - ... and all BMP messages\n"
     "  \t4 - ... and information about affected flows\n"
     "  \t5 - ... and network summary for affected flows\n"
     "  \t    (requires --network-summary SPANS option)\n"
