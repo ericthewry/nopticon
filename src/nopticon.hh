@@ -3,6 +3,6 @@
 
 #pragma once
 
-#define NOPTICON_VERSION "0.0.0"
+#define NOPTICON_VERSION "0.0.1"
 
 #include "analysis.hh"

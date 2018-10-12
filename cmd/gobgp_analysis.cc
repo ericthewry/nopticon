@@ -195,9 +195,10 @@ void log_t::print_network_summary(
         continue;
       }
       if (is_empty) {
-        writer.Key("network-summary");
+        writer.StartObject();
         writer.Key("flow");
         writer.String(ipv4_format(flow->ip_prefix));
+        writer.Key("edges");
         writer.StartArray();
         is_empty = false;
       }
@@ -217,6 +218,7 @@ void log_t::print_network_summary(
   }
   if (not is_empty) {
     writer.EndArray();
+    writer.EndObject();
   }
 }
 
@@ -224,18 +226,24 @@ void log_t::print_network_summary(
     writer_t &writer, const nopticon::flow_tree_t &flow_tree,
     const nopticon::network_summary_t &network_summary) const {
   auto flow_tree_iter = flow_tree.iter();
+  writer.Key("network-summary");
+  writer.StartArray();
   do {
     auto flow = flow_tree_iter.ptr();
     print_network_summary(writer, flow, network_summary);
   } while (flow_tree_iter.next());
+  writer.EndArray();
 }
 
 void log_t::print_network_summary(
     writer_t &writer, const nopticon::affected_flows_t &affected_flows,
     const nopticon::network_summary_t &network_summary) const {
+  writer.Key("network-summary");
+  writer.StartArray();
   for (auto flow : affected_flows) {
     print_network_summary(writer, flow, network_summary);
   }
+  writer.EndArray();
 }
 
 void log_t::print_errors(
