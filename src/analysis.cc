@@ -17,6 +17,14 @@ network_summary_t::network_summary_t(const spans_t &spans,
   assert(number_of_nodes <= analysis_t::MAX_NUMBER_OF_NODES);
 }
 
+void network_summary_t::reset() noexcept {
+  for (auto &history_vec : m_tensor) {
+    for (auto &history : history_vec) {
+      history.reset();
+    }
+  }
+}
+
 void history_t::update_duration(bool is_stop, timestamp_t current) {
   constexpr float zero_div_guard = 0.00001;
   // Start: 0, 2, 4, ...
@@ -74,6 +82,15 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
 
 void history_t::start(timestamp_t current) { update_duration(false, current); }
 void history_t::stop(timestamp_t current) { update_duration(true, current); }
+
+void history_t::reset() noexcept {
+  m_head = m_time_window.size() - 1;
+  for (auto &slice : m_slices) {
+    slice.duration = 0;
+    slice.rank = 0;
+    slice.tail = 0;
+  }
+}
 
 const slices_t &network_summary_t::slices(flow_id_t flow_id, nid_t s,
                                           nid_t t) const {
