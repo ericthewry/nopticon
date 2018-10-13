@@ -1,0 +1,340 @@
+{
+    "policies": [
+        {
+            "type": "reachability",
+            "source": "leaf0_1",
+            "target": "leaf0_0",
+            "flow": "3.0.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_0",
+            "target": "leaf0_0",
+            "flow": "3.0.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_1",
+            "target": "leaf0_0",
+            "flow": "3.0.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_0",
+            "target": "leaf0_0",
+            "flow": "3.0.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_1",
+            "target": "leaf0_0",
+            "flow": "3.0.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_0",
+            "target": "leaf0_0",
+            "flow": "3.0.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_1",
+            "target": "leaf0_0",
+            "flow": "3.0.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_0",
+            "target": "leaf0_1",
+            "flow": "3.0.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_0",
+            "target": "leaf0_1",
+            "flow": "3.0.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_1",
+            "target": "leaf0_1",
+            "flow": "3.0.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_0",
+            "target": "leaf0_1",
+            "flow": "3.0.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_1",
+            "target": "leaf0_1",
+            "flow": "3.0.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_0",
+            "target": "leaf0_1",
+            "flow": "3.0.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_1",
+            "target": "leaf0_1",
+            "flow": "3.0.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_0",
+            "target": "leaf1_0",
+            "flow": "3.1.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_1",
+            "target": "leaf1_0",
+            "flow": "3.1.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_1",
+            "target": "leaf1_0",
+            "flow": "3.1.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_0",
+            "target": "leaf1_0",
+            "flow": "3.1.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_1",
+            "target": "leaf1_0",
+            "flow": "3.1.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_0",
+            "target": "leaf1_0",
+            "flow": "3.1.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_1",
+            "target": "leaf1_0",
+            "flow": "3.1.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_0",
+            "target": "leaf1_1",
+            "flow": "3.1.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_1",
+            "target": "leaf1_1",
+            "flow": "3.1.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_0",
+            "target": "leaf1_1",
+            "flow": "3.1.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_0",
+            "target": "leaf1_1",
+            "flow": "3.1.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_1",
+            "target": "leaf1_1",
+            "flow": "3.1.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_0",
+            "target": "leaf1_1",
+            "flow": "3.1.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_1",
+            "target": "leaf1_1",
+            "flow": "3.1.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_0",
+            "target": "leaf2_0",
+            "flow": "3.2.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_1",
+            "target": "leaf2_0",
+            "flow": "3.2.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_0",
+            "target": "leaf2_0",
+            "flow": "3.2.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_1",
+            "target": "leaf2_0",
+            "flow": "3.2.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_1",
+            "target": "leaf2_0",
+            "flow": "3.2.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_0",
+            "target": "leaf2_0",
+            "flow": "3.2.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_1",
+            "target": "leaf2_0",
+            "flow": "3.2.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_0",
+            "target": "leaf2_1",
+            "flow": "3.2.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_1",
+            "target": "leaf2_1",
+            "flow": "3.2.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_0",
+            "target": "leaf2_1",
+            "flow": "3.2.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_1",
+            "target": "leaf2_1",
+            "flow": "3.2.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_0",
+            "target": "leaf2_1",
+            "flow": "3.2.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_0",
+            "target": "leaf2_1",
+            "flow": "3.2.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_1",
+            "target": "leaf2_1",
+            "flow": "3.2.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_0",
+            "target": "leaf3_0",
+            "flow": "3.3.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_1",
+            "target": "leaf3_0",
+            "flow": "3.3.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_0",
+            "target": "leaf3_0",
+            "flow": "3.3.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_1",
+            "target": "leaf3_0",
+            "flow": "3.3.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_0",
+            "target": "leaf3_0",
+            "flow": "3.3.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_1",
+            "target": "leaf3_0",
+            "flow": "3.3.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_1",
+            "target": "leaf3_0",
+            "flow": "3.3.0.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_0",
+            "target": "leaf3_1",
+            "flow": "3.3.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf0_1",
+            "target": "leaf3_1",
+            "flow": "3.3.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_0",
+            "target": "leaf3_1",
+            "flow": "3.3.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf1_1",
+            "target": "leaf3_1",
+            "flow": "3.3.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_0",
+            "target": "leaf3_1",
+            "flow": "3.3.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf2_1",
+            "target": "leaf3_1",
+            "flow": "3.3.1.0/24"
+        },
+        {
+            "type": "reachability",
+            "source": "leaf3_0",
+            "target": "leaf3_1",
+            "flow": "3.3.1.0/24"
+        }
+    ]
+}
