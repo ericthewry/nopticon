@@ -12,11 +12,9 @@ from nopticon import *
 def check_reachability(policy, summary):
     assert(isinstance(policy, ReachabilityPolicy))
     edge = (policy._source, policy._target)
-    if policy._flow not in summary.get_edges():
+    if edge not in summary.get_edges(policy._flow):
         return -1
-    if edge not in summary.get_edges()[policy._flow]:
-        return -1
-    edge_details = summary.get_edges()[policy._flow][edge]
+    edge_details = summary.get_edges(policy._flow)[edge]
     return edge_details['rank-0']
 
 def main():

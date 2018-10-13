@@ -9,19 +9,20 @@ class NetworkSummary:
     def __init__(self, summary_json):
         self._summary = json.loads(summary_json)
 
-        # Find flows
+        # Extract edges
         self._edges = {}
-        for key in self._summary.keys():
-            if '/' in key:
-                network = ipaddress.ip_network(key)
-                flow_edges = {}
-                for edge_details in self._summary[key]:
-                    edge = (edge_details['source'], edge_details['target'])
-                    flow_edges[edge] = edge_details
-                self._edges[network] = flow_edges
+        for flow in self._summary['network-summary']:
+            flow_prefix = ipaddress.ip_network(flow['flow'])
+            flow_edges = {}
+            for edge_details in flow['edges']:
+                edge = (edge_details['source'], edge_details['target'])
+                flow_edges[edge] = edge_details
+            self._edges[flow_prefix] = flow_edges
 
-    def get_edges(self):
-        return self._edges
+    def get_edges(self, flow):
+        if flow not in self._edges:
+            return {}
+        return self._edges[flow]
 
 def parse_policies(policies_json):
     policies_dict = json.loads(policies_json)
