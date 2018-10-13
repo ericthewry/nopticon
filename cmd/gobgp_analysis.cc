@@ -47,8 +47,7 @@ public:
         unsigned opt_verbosity, bool opt_node_ids, float opt_rank_threshold,
         const nopticon::spans_t opt_network_summary_spans)
       : m_ostream(buffer), m_nid_to_name(nid_to_name),
-        m_opt_node_ids{opt_node_ids},
-        m_opt_rank_threshold{opt_rank_threshold},
+        m_opt_node_ids{opt_node_ids}, m_opt_rank_threshold{opt_rank_threshold},
         m_opt_verbosity{opt_verbosity}, m_opt_network_summary_spans{
                                             opt_network_summary_spans} {}
 
@@ -385,22 +384,24 @@ nopticon::ip_prefix_t make_ip_prefix(const std::string &ip_prefix) {
 }
 
 enum class cmd_t : uint8_t {
-   RESET_NETWORK_SUMMARY = 0,
-   PRINT_LOG,
+  RESET_NETWORK_SUMMARY = 0,
+  PRINT_LOG,
 };
 
-void process_cmd(nopticon::analysis_t &analysis, log_t& log, rapidjson::Document &document) {
+void process_cmd(nopticon::analysis_t &analysis, log_t &log,
+                 rapidjson::Document &document) {
   assert(document["Command"].IsUint());
   auto cmd = static_cast<cmd_t>(document["Command"].GetInt());
   switch (cmd) {
-     case cmd_t::RESET_NETWORK_SUMMARY:
-       analysis.reset_network_summary();
-       break;
-     case cmd_t::PRINT_LOG:
-       log.print(analysis, true);
-       break;
-     default:
-       std::cerr << "Unsupported gobgp-analysis command: " << static_cast<unsigned>(cmd) << std::endl;
+  case cmd_t::RESET_NETWORK_SUMMARY:
+    analysis.reset_network_summary();
+    break;
+  case cmd_t::PRINT_LOG:
+    log.print(analysis, true);
+    break;
+  default:
+    std::cerr << "Unsupported gobgp-analysis command: "
+              << static_cast<unsigned>(cmd) << std::endl;
   }
 }
 
@@ -415,8 +416,8 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
   while (not document.ParseStream<rapidjson::kParseStopWhenDoneFlag>(input)
                  .HasParseError()) {
     if (document.HasMember("Command")) {
-       process_cmd(analysis, log, document);
-       continue;
+      process_cmd(analysis, log, document);
+      continue;
     }
     assert(document.HasMember("Header"));
     assert(document["Header"].HasMember("Type"));
@@ -474,8 +475,7 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
         assert(nlri_value.HasMember("prefix"));
         auto ip_prefix = make_ip_prefix(nlri_value["prefix"].GetString());
         auto target = ip_to_nid.at(next_hop);
-        analysis.insert_or_assign(ip_prefix, source, {target},
-                                  timestamp);
+        analysis.insert_or_assign(ip_prefix, source, {target}, timestamp);
         log.print(analysis, false);
       }
     }

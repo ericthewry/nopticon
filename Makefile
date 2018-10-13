@@ -11,7 +11,7 @@ SRC_HEADER = src/analysis.hh           \
              src/ip_prefix_tree.hh     \
              src/ipv4.hh               \
              src/nopticon.hh           \
-              # Empty line
+             # Empty line
 
 CMD = cmd/gobgp_analysis.cc            \
       # Empty line
@@ -50,4 +50,4 @@ clean:
 	rm -rf ${BUILD_DIR}
 
 format:
-	clang-format -i ${SRC} ${SRC_HEADER} ${TEST} ${TEST_HEADER}
+	clang-format -i ${SRC} ${SRC_HEADER} ${TEST} ${TEST_HEADER} ${CMD}
