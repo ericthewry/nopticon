@@ -13,11 +13,17 @@ static void check_duration(const slices_t &slices, duration_t d) {
   assert(slices.front().duration == d);
 }
 
-static void check_rank(const slices_t &slices, double rank) {
+static void check_rank(const network_summary_t &network_summary,
+                       const history_t &history, double rank) {
   constexpr double epsilon = 0.001;
+  auto &slices = history.slices();
   assert(slices.size() == 1);
-  assert(slices.front().rank <= rank + epsilon);
-  assert(slices.front().rank >= rank - epsilon);
+  auto ranks = network_summary.ranks(history);
+  assert(ranks.size() == 1);
+  auto slice_rank = ranks.front();
+  assert(slice_rank <= 1.0);
+  assert(slice_rank <= rank + epsilon);
+  assert(slice_rank >= rank - epsilon);
 }
 
 static void test_network_summary() {
@@ -67,74 +73,48 @@ static void test_history(history_t history) {
   assert(history.slices().front().span() == 20);
 
   check_duration(history.slices(), 0);
-  check_rank(history.slices(), 0.0);
   history.stop(9);
   check_duration(history.slices(), 0);
-  check_rank(history.slices(), 0.0);
   history.start(3); // START: [3]
   check_duration(history.slices(), 0);
-  check_rank(history.slices(), 0.0);
   history.start(2); // IGNORE
   check_duration(history.slices(), 0);
-  check_rank(history.slices(), 0.0);
   history.start(4); // INGORE
   check_duration(history.slices(), 0);
-  check_rank(history.slices(), 0.0);
   history.stop(7); // STOP: [3,7]
   check_duration(history.slices(), 4);
-  check_rank(history.slices(), 1.0);
   history.stop(8); // IGNORE
   check_duration(history.slices(), 4);
-  check_rank(history.slices(), 1.0);
   history.start(2); // IGNORE
   check_duration(history.slices(), 4);
-  check_rank(history.slices(), 1.0);
   history.stop(8); // IGNORE
   check_duration(history.slices(), 4);
-  check_rank(history.slices(), 1.0);
   history.start(12); // START [3,7,12]
   check_duration(history.slices(), 4);
-  check_rank(history.slices(), 1.0);
   history.stop(9); // IGNORE
   check_duration(history.slices(), 4);
-  check_rank(history.slices(), 1.0);
   history.stop(15); // STOP: [3,7,12,15]
   check_duration(history.slices(), 7);
-  const double rank_0 = ((7 - 3) + (15 - 12)) / static_cast<float>(15 - 3);
-  check_rank(history.slices(), rank_0);
 
   // extends array because span is still not filled yet
   history.start(18); // START: [3,7,12,15,18]
   check_duration(history.slices(), 7);
-  check_rank(history.slices(), rank_0);
   history.stop(20); // STOP: [3,7,12,15,18,20]
-  const double rank_1 =
-      ((7 - 3) + (15 - 12) + (20 - 18)) / static_cast<float>(20 - 3);
   check_duration(history.slices(), 9);
-  check_rank(history.slices(), rank_1);
 
   // exceeds span=20, so tail of slice is adjusted
   history.start(22); // START: [3,7,12,15,18,20,22]
   history.stop(25);  // STOP: [3,7,12,15,18,20,22,25]
-  const double rank_2 =
-      ((15 - 12) + (20 - 18) + (25 - 22)) / static_cast<float>(25 - 12);
   check_duration(history.slices(), 8);
-  check_rank(history.slices(), rank_2);
 
   // span is filled, so no extension, instead wrap around in ring buffer
   history.start(28); // START: [28,7,12,15,18,20,22]
   history.stop(32);  // STOP: [28,32,12,15,18,20,22,25]
-  const double rank_3 = ((32 - 28) + (15 - 12) + (20 - 18) + (25 - 22)) /
-                        static_cast<float>(32 - 12);
   check_duration(history.slices(), 12);
-  check_rank(history.slices(), rank_3);
 
   history.start(35); // START: [28,32,35,15,18,20,22]
   history.stop(37);  // STOP: [28,32,35,37,18,20,22,25]
-  const double rank_4 = ((37 - 35) + (32 - 28) + (20 - 18) + (25 - 22)) /
-                        static_cast<float>(37 - 18);
   check_duration(history.slices(), 11);
-  check_rank(history.slices(), rank_4);
 }
 
 static void test_history() {
@@ -199,9 +179,40 @@ static void test_loop() {
   assert(loop == loop_t({a, b, c}));
 }
 
+static void test_analysis() {
+  const std::size_t number_of_nodes = 8;
+  const ip_prefix_t ip_prefix = ip_prefix_64_127;
+
+  spans_t spans{18};
+  analysis_t analysis{spans, number_of_nodes};
+  analysis.insert_or_assign(ip_prefix, 3, {5}, 1);
+  analysis.insert_or_assign(ip_prefix, 4, {5}, 2);
+  // idempotent
+  analysis.insert_or_assign(ip_prefix, 4, {5}, 2);
+  analysis.insert_or_assign(ip_prefix, 4, {7}, 7);
+  analysis.erase(ip_prefix, 3, 19);
+  auto &network_summary = analysis.network_summary();
+  auto &history_3_5 = network_summary.history(1, 3, 5);
+  assert(history_3_5.slices().size() == 1);
+  assert(history_3_5.slices().front().duration == 18);
+  check_rank(network_summary, history_3_5, 1.0);
+
+  auto &history_4_5 = network_summary.history(1, 4, 5);
+  assert(history_4_5.slices().size() == 1);
+  assert(history_4_5.slices().front().duration == 5);
+  check_rank(network_summary, history_4_5, 5 / static_cast<float>(19 - 1));
+
+  auto &history_4_7 = network_summary.history(1, 4, 7);
+  assert(history_4_7.slices().size() == 1);
+  assert(history_4_7.slices().front().duration == 0);
+  check_rank(network_summary, history_4_7,
+             (19 - 7) / static_cast<float>(19 - 1));
+}
+
 void run_analysis_test() {
   test_network_summary();
   test_history();
   test_loop();
   test_loop_with_different_ip_prefixes();
+  test_analysis();
 }

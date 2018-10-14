@@ -177,16 +177,22 @@ void log_t::print_network_summary(
       if (s == t) {
         continue;
       }
-      auto &slices = network_summary.slices(flow->id, s, t);
+      auto &history = network_summary.history(flow->id, s, t);
+      auto &slices = history.slices();
+      if (slices.empty()) {
+        continue;
+      }
+      auto ranks = network_summary.ranks(history);
       if (slices.size() == 2) {
-        auto distance = std::fabs(slices.front().rank - slices.back().rank);
+        assert(ranks.size() == 2);
+        auto distance = std::fabs(ranks.front() - ranks.back());
         if (distance < m_opt_rank_threshold) {
           continue;
         }
       }
       bool non_zero_rank = false;
-      for (const auto &slice : slices) {
-        if (slice.rank != 0.0f) {
+      for (auto rank : ranks) {
+        if (rank != 0.0f) {
           non_zero_rank = true;
         }
       }
@@ -206,11 +212,11 @@ void log_t::print_network_summary(
       print_nid(writer, s);
       writer.Key("target");
       print_nid(writer, t);
-      unsigned slice_id = 0;
-      for (const auto &slice : slices) {
-        assert(slice_id < s_rank_strings_len);
-        writer.Key(s_rank_strings[slice_id++]);
-        writer.Double(slice.rank);
+      unsigned rank_id = 0;
+      for (auto rank : ranks) {
+        assert(rank_id < s_rank_strings_len);
+        writer.Key(s_rank_strings[rank_id++]);
+        writer.Double(rank);
       }
       writer.EndObject();
     }

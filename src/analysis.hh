@@ -26,9 +26,6 @@ public:
   /// total slice-time in which a property held
   duration_t duration = 0;
 
-  /// normalized duration in which a property held
-  float rank = 0;
-
   /// total permittable time duration of the slice
   duration_t span() const noexcept { return m_span; }
 
@@ -46,6 +43,9 @@ typedef std::vector<slice_t> slices_t;
 typedef std::vector<duration_t> spans_t;
 typedef std::vector<timestamp_t> timestamps_t;
 
+typedef float rank_t;
+typedef std::vector<rank_t> ranks_t;
+
 /// A sliced, sliding time window
 class history_t {
 public:
@@ -59,6 +59,8 @@ public:
       m_slices.emplace_back(span);
     }
   }
+
+  bool request_stop = false;
 
   /// Mark the time at which a property starts to hold
   void start(timestamp_t);
@@ -76,8 +78,22 @@ public:
   const timestamps_t &time_window() const noexcept { return m_time_window; }
 
 private:
-  std::size_t index(std::size_t i) const {
+  friend class network_summary_t;
+
+  rank_t rank(const slice_t &, timestamp_t, timestamp_t) const noexcept;
+
+  /// Index modulo length of time window
+  std::size_t index(std::size_t i) const noexcept {
     return i & (m_time_window.size() - 1);
+  }
+
+  /// Newest start or stop time in the current time window
+  timestamp_t newest_time() const noexcept { return m_time_window.at(m_head); }
+
+  /// Oldest start time in the current time window
+  timestamp_t oldest_start_time(const slice_t &slice) const {
+    assert(!(slice.tail & 1));
+    return m_time_window.at(slice.tail);
   }
 
   void update_duration(bool, timestamp_t);
@@ -93,6 +109,8 @@ class network_summary_t {
 public:
   const spans_t spans;
   const std::size_t number_of_nodes;
+  timestamp_t global_start = std::numeric_limits<timestamp_t>::max(),
+              global_stop = 0;
   network_summary_t(std::size_t);
   network_summary_t(const spans_t &, std::size_t);
 
@@ -101,7 +119,12 @@ public:
   /// Ordered according to their span, from longest to shortest
   const slices_t &slices(flow_id_t, nid_t, nid_t) const;
 
-  history_vec_t &flow(flow_id_t);
+  const history_t &history(flow_id_t, nid_t, nid_t) const;
+
+  /// For each slice, normalized duration in which a property held
+  ranks_t ranks(const history_t &) const;
+
+  history_vec_t &history_vec(flow_id_t);
   history_t &history(flow_id_t, nid_t, nid_t);
 
 private:

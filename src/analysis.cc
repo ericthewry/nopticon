@@ -6,27 +6,21 @@
 
 namespace nopticon {
 
-network_summary_t::network_summary_t(std::size_t number_of_nodes)
-    : spans{}, number_of_nodes{number_of_nodes} {
-  assert(number_of_nodes <= analysis_t::MAX_NUMBER_OF_NODES);
-}
-
-network_summary_t::network_summary_t(const spans_t &spans,
-                                     std::size_t number_of_nodes)
-    : spans{spans}, number_of_nodes{number_of_nodes} {
-  assert(number_of_nodes <= analysis_t::MAX_NUMBER_OF_NODES);
-}
-
-void network_summary_t::reset() noexcept {
-  for (auto &history_vec : m_tensor) {
-    for (auto &history : history_vec) {
-      history.reset();
-    }
+rank_t history_t::rank(const slice_t &slice, timestamp_t global_start,
+                       timestamp_t global_stop) const noexcept {
+  constexpr float zero_div_guard = 0.00001;
+  assert(global_start <= global_start);
+  assert(oldest_start_time(slice) <= newest_time());
+  auto duration = slice.duration;
+  if (!(m_head & 1) and newest_time() <= global_stop) {
+    // We're in 'start' and need to add a missing 'stop'.
+    duration += global_stop - newest_time();
   }
+  auto span = std::min(slice.span(), global_stop - global_start);
+  return duration / (span + zero_div_guard);
 }
 
 void history_t::update_duration(bool is_stop, timestamp_t current) {
-  constexpr float zero_div_guard = 0.00001;
   // Start: 0, 2, 4, ...
   // Stop: 1, 3, 5, ...
   auto newest = m_time_window.at(m_head);
@@ -53,7 +47,7 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
       auto actual_span = slice.span();
       for (;;) {
         assert(!(tail & 1));
-        auto oldest_start = m_time_window[tail];
+        auto oldest_start = oldest_start_time(slice);
         assert(oldest_start != 0);
         assert(oldest_start <= newest);
         actual_span = current - oldest_start;
@@ -75,7 +69,6 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
         tail = index(tail + 2);
       }
       assert(actual_span <= slice.span());
-      slice.rank = d / (actual_span + zero_div_guard);
     }
   }
 }
@@ -87,9 +80,36 @@ void history_t::reset() noexcept {
   m_head = m_time_window.size() - 1;
   for (auto &slice : m_slices) {
     slice.duration = 0;
-    slice.rank = 0;
     slice.tail = 0;
   }
+}
+
+network_summary_t::network_summary_t(std::size_t number_of_nodes)
+    : spans{}, number_of_nodes{number_of_nodes} {
+  assert(number_of_nodes <= analysis_t::MAX_NUMBER_OF_NODES);
+}
+
+network_summary_t::network_summary_t(const spans_t &spans,
+                                     std::size_t number_of_nodes)
+    : spans{spans}, number_of_nodes{number_of_nodes} {
+  assert(number_of_nodes <= analysis_t::MAX_NUMBER_OF_NODES);
+}
+
+void network_summary_t::reset() noexcept {
+  for (auto &history_vec : m_tensor) {
+    for (auto &history : history_vec) {
+      history.reset();
+    }
+  }
+}
+
+ranks_t network_summary_t::ranks(const history_t &history) const {
+  ranks_t ranks;
+  ranks.reserve(history.slices().size());
+  for (auto &slice : history.slices()) {
+    ranks.push_back(history.rank(slice, global_start, global_stop));
+  }
+  return ranks;
 }
 
 const slices_t &network_summary_t::slices(flow_id_t flow_id, nid_t s,
@@ -98,15 +118,15 @@ const slices_t &network_summary_t::slices(flow_id_t flow_id, nid_t s,
   if (flow_id >= m_tensor.size()) {
     return s_empty_slices;
   }
-  auto &matrix = m_tensor[flow_id];
+  auto &history_vec = m_tensor[flow_id];
   auto index = make_index(s, t);
-  if (index >= matrix.size()) {
+  if (index >= history_vec.size()) {
     return s_empty_slices;
   }
-  return matrix[index].slices();
+  return history_vec[index].slices();
 }
 
-history_vec_t &network_summary_t::flow(flow_id_t flow_id) {
+history_vec_t &network_summary_t::history_vec(flow_id_t flow_id) {
   if (flow_id >= m_tensor.size()) {
     auto old_size = m_tensor.size();
     m_tensor.resize((flow_id + 1) << 1);
@@ -120,11 +140,25 @@ history_vec_t &network_summary_t::flow(flow_id_t flow_id) {
   return m_tensor[flow_id];
 }
 
-history_t &network_summary_t::history(flow_id_t flow_id, nid_t s, nid_t t) {
-  auto &matrix = flow(flow_id);
+const history_t &network_summary_t::history(flow_id_t flow_id, nid_t s,
+                                            nid_t t) const {
+  static history_t s_empty_history{spans_t{}};
+  if (flow_id >= m_tensor.size()) {
+    return s_empty_history;
+  }
+  auto &history_vec = m_tensor[flow_id];
   auto index = make_index(s, t);
-  assert(index < matrix.size());
-  return matrix[index];
+  if (index >= history_vec.size()) {
+    return s_empty_history;
+  }
+  return history_vec[index];
+}
+
+history_t &network_summary_t::history(flow_id_t flow_id, nid_t s, nid_t t) {
+  auto &hv = history_vec(flow_id);
+  auto index = make_index(s, t);
+  assert(index < hv.size());
+  return hv[index];
 }
 
 void find_loops(source_t start, const affected_flows_t &affected_flows,
@@ -222,9 +256,16 @@ void analysis_t::update_network_summary(timestamp_t timestamp) {
   std::bitset<MAX_NUMBER_OF_NODES> bitset;
   stack.reserve(m_network_summary.number_of_nodes);
 
+  if (timestamp < m_network_summary.global_start) {
+    m_network_summary.global_start = timestamp;
+  }
+  if (m_network_summary.global_stop < timestamp) {
+    m_network_summary.global_stop = timestamp;
+  }
+
   for (auto flow : m_affected_flows) {
     assert(stack.empty());
-    auto &matrix = m_network_summary.flow(flow->id);
+    auto &history_vec = m_network_summary.history_vec(flow->id);
     auto &rule_ref_per_source = flow->data;
     for (auto &kv : rule_ref_per_source) {
       assert(stack.empty());
@@ -241,21 +282,26 @@ void analysis_t::update_network_summary(timestamp_t timestamp) {
         auto rule_ref = rule_ref_per_source_iter->second;
         for (auto t : rule_ref->target) {
           auto index = base_index + t;
-          assert(index < matrix.size());
+          assert(index < history_vec.size());
           if (bitset.test(t)) {
             continue;
           }
-          matrix[index].start(timestamp);
+          auto &history = history_vec[index];
+          history.start(timestamp);
+          history.request_stop = false;
           bitset.set(t);
           stack.push_back(t);
         }
       }
+      bitset.reset();
     }
-    for (auto &history : matrix) {
+    for (auto &history : history_vec) {
       // stop requests for histories that just got started are no-ops
-      history.stop(timestamp);
+      if (history.request_stop) {
+        history.stop(timestamp);
+      }
+      history.request_stop = true;
     }
-    bitset.reset();
   }
 }
 
