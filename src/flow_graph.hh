@@ -5,7 +5,6 @@
 
 #include "ip_prefix_tree.hh"
 
-#include <ostream>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
@@ -66,7 +65,5 @@ private:
   flow_tree_t m_flow_tree;
   flow_id_t m_next_flow_id = 1;
 };
-
-std::ostream &operator<<(std::ostream &, const ip_prefix_t &);
 
 } // namespace nopticon

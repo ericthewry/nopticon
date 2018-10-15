@@ -4,6 +4,7 @@ BUILD_DIR = build
 
 SRC = src/analysis.cc                  \
       src/flow_graph.cc                \
+      src/ipv4.cc                      \
       # Empty line
 
 SRC_HEADER = src/analysis.hh           \

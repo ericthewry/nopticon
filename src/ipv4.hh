@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <ostream>
 #include <vector>
 
 namespace nopticon {
@@ -106,5 +107,7 @@ struct ip_prefix_order_t {
 
 template <class T>
 using ip_prefix_map_t = std::map<ip_prefix_t, T, ip_prefix_order_t>;
+
+std::ostream &operator<<(std::ostream &, const ip_prefix_t &);
 
 } // namespace nopticon
