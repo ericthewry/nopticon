@@ -9,9 +9,10 @@ namespace nopticon {
 rank_t history_t::rank(const slice_t &slice, timestamp_t global_start,
                        timestamp_t global_stop) const noexcept {
   constexpr float zero_div_guard = 0.00001;
-  assert(global_start <= global_start);
-  assert(oldest_start_time(slice) <= newest_time());
   auto duration = slice.duration;
+  assert(global_start <= global_start);
+  // Timestamps of non-empty histories are non-decreasing.
+  assert(duration == 0 or oldest_start_time(slice) <= newest_time());
   if (!(m_head & 1) and newest_time() <= global_stop) {
     // We're in 'start' and need to add a missing 'stop'.
     duration += global_stop - newest_time();
