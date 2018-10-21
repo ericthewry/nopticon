@@ -46,6 +46,10 @@ typedef std::vector<timestamp_t> timestamps_t;
 typedef float rank_t;
 typedef std::vector<rank_t> ranks_t;
 
+enum error_t : uint8_t {
+  ERROR_SLICE_TOO_SMALL = 1
+};
+
 /// A sliced, sliding time window
 class history_t {
 public:

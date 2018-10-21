@@ -3,6 +3,8 @@
 
 #include "analysis.hh"
 #include <bitset>
+#include <cstdlib>
+#include <iostream>
 
 namespace nopticon {
 
@@ -22,6 +24,7 @@ rank_t history_t::rank(const slice_t &slice, timestamp_t global_start,
 }
 
 void history_t::update_duration(bool is_stop, timestamp_t current) {
+  assert(current != 0);
   // Start: 0, 2, 4, ...
   // Stop: 1, 3, 5, ...
   auto newest = m_time_window.at(m_head);
@@ -67,6 +70,10 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
         auto oldest_stop = m_time_window.at(index(tail + 1));
         assert(oldest_start <= oldest_stop);
         d -= oldest_stop - oldest_start;
+        if (tail + 1 == m_head) {
+          std::cerr << "Error: slice is too small\n";
+          std::exit(ERROR_SLICE_TOO_SMALL);
+        }
         tail = index(tail + 2);
       }
       assert(actual_span <= slice.span());
