@@ -84,15 +84,28 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
 void history_t::start(timestamp_t current) { update_duration(false, current); }
 void history_t::stop(timestamp_t current) { update_duration(true, current); }
 
-#if _NOPTICON_DEBUG_
-void history_t::print() {
-  std::cout << "History: ";
-  for (auto t : m_time_window) {
-    std::cout << t << " ";
+timestamps_t history_t::timestamps(timestamp_t global_end) const noexcept {
+  duration_t duration = 0;
+  std::size_t tail = m_time_window.size();
+  for (auto& slice : m_slices) {
+    if (slice.duration > duration) {
+      tail = slice.tail;
+    }
   }
-  std::cout << std::endl;
+  if (tail >= m_time_window.size()) {
+    return {};
+  }
+  timestamps_t vec;
+  vec.reserve(m_time_window.size());
+  vec.push_back(m_time_window[tail]);
+  for (auto i = tail + 1; i != m_head and vec.back() <= m_time_window[i]; ++i) {
+    vec.push_back(m_time_window[i]);
+  }
+  if ((vec.size() & 1) == 1) {
+    vec.push_back(global_end);
+  }
+  return vec;
 }
-#endif
 
 void history_t::reset() noexcept {
   m_head = m_time_window.size() - 1;

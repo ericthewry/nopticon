@@ -179,10 +179,6 @@ void log_t::print_network_summary(
       }
       auto &history = network_summary.history(flow->id, s, t);
       auto &slices = history.slices();
-#if _NOPTICON_DEBUG_
-      std::cout << "source: " << m_nid_to_name.at(s) << " target: " << m_nid_to_name.at(t) << " ";
-      history.print();
-#endif
       if (slices.empty()) {
         continue;
       }
@@ -221,6 +217,15 @@ void log_t::print_network_summary(
         assert(rank_id < s_rank_strings_len);
         writer.Key(s_rank_strings[rank_id++]);
         writer.Double(rank);
+      }
+      if (m_opt_verbosity >= 8) {
+        writer.Key("history");
+        writer.StartArray();
+        auto timestamps = history.timestamps(network_summary.global_stop);
+        for (auto timestamp : timestamps) {
+          writer.Uint(timestamp);
+        }
+        writer.EndArray();
       }
       writer.EndObject();
     }

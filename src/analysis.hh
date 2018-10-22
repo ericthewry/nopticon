@@ -75,9 +75,7 @@ public:
   /// Reset each slice
   void reset() noexcept;
 
-#if _NOPTICON_DEBUG_
-  void print();
-#endif
+  timestamps_t timestamps(timestamp_t) const noexcept;
 
   /// Ordered according to their span, from shortest to longest
   const slices_t &slices() const noexcept { return m_slices; }
