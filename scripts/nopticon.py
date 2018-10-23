@@ -44,6 +44,7 @@ class Command():
     def print_log(cls):
         return cls(CommandType.PRINT_LOG)
 
+"""Convert policies JSON to a list of Policy objects"""
 def parse_policies(policies_json):
     policies_dict = json.loads(policies_json)
     policies = []
@@ -66,4 +67,14 @@ class ReachabilityPolicy(Policy):
 
     def __str__(self):
         return '%s %s->%s' % (self._flow, self._source, self._target)
+
+"""Convert rdns JSON to a dictionary of IPs to router names"""
+def parse_rdns(rdns_json):
+    routers_dict = json.loads(rdns_json)
+    rdns = {}
+    for router_dict in routers_dict['routers']:
+        name = router_dict['name']
+        for iface_ip in router_dict['ifaces']:
+            rdns[ipaddress.ip_address(iface_ip)] = name
+    return rdns
 

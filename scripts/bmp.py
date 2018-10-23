@@ -33,6 +33,7 @@ class Message:
         self._src_id = (None if src_id == '' else ipaddress.ip_address(src_id))
         src_as = msg_dict['PeerHeader']['PeerAS']
         self._src_as = (None if src_as == 0 else src_as)
+        self._timestamp = msg_dict['PeerHeader']['Timestamp']
 
     def __str__(self):
         if (self._src_id == None):
@@ -49,3 +50,4 @@ class PeerUpMessage(Message):
     def __init__(self, msg_dict):
         assert MessageType(msg_dict['Header']['Type']) == MessageType.PEER_UP
         super().__init__(MessageType.PEER_UP, msg_dict)
+        self._peer = ipaddress.ip_address(msg_dict['Body']['LocalAddress'])

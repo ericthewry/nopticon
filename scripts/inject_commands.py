@@ -6,8 +6,6 @@ Inject nopticon commands into a BMP message stream
 
 from argparse import ArgumentParser
 import bmp 
-import ipaddress
-import json
 import nopticon
 
 def main():
