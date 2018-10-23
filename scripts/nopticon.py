@@ -2,6 +2,7 @@
 Python classes for Nopticon 
 """
 
+from enum import Enum
 import ipaddress
 import json
 
@@ -23,6 +24,25 @@ class NetworkSummary:
         if flow not in self._edges:
             return {}
         return self._edges[flow]
+
+class CommandType(Enum):
+    RESET_NETWORK_SUMMARY = 0
+    PRINT_LOG = 1
+
+class Command():
+    def __init__(self, cmd_type):
+        self._type = cmd_type
+
+    def json(self):
+        return json.dumps({'Command' : self._type.value})
+
+    @classmethod
+    def reset_network_summary(cls):
+        return cls(CommandType.RESET_NETWORK_SUMMARY)
+
+    @classmethod
+    def print_log(cls):
+        return cls(CommandType.PRINT_LOG)
 
 def parse_policies(policies_json):
     policies_dict = json.loads(policies_json)
