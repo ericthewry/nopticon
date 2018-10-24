@@ -51,13 +51,15 @@ public:
         m_opt_verbosity{opt_verbosity}, m_opt_network_summary_spans{
                                             opt_network_summary_spans} {}
 
-  void print(const nopticon::analysis_t &, bool ignore_verbosity);
+  void print(const nopticon::analysis_t &);
 
   const nopticon::spans_t &opt_network_summary_spans() const noexcept {
     return m_opt_network_summary_spans;
   }
 
 private:
+  friend void process_cmd(nopticon::analysis_t &, log_t &, rapidjson::Document &);
+
   typedef rapidjson::Writer<rapidjson::StringBuffer> writer_t;
 
   void print_flows(writer_t &, const nopticon::flow_tree_t &) const;
@@ -294,7 +296,7 @@ void log_t::print_errors(
   }
 }
 
-void log_t::print(const nopticon::analysis_t &analysis, bool ignore_verbosity) {
+void log_t::print(const nopticon::analysis_t &analysis) {
   rapidjson::StringBuffer s;
   writer_t writer{s};
   writer.StartObject();
@@ -312,20 +314,20 @@ void log_t::print(const nopticon::analysis_t &analysis, bool ignore_verbosity) {
     writer.EndArray();
   }
   if (not m_opt_network_summary_spans.empty()) {
-    if (ignore_verbosity or m_opt_verbosity >= 7) {
+    if (m_opt_verbosity >= 7) {
       print_network_summary(writer, analysis.flow_graph().flow_tree(),
                             analysis.network_summary());
-    } else if (ignore_verbosity or m_opt_verbosity >= 5) {
+    } else if (m_opt_verbosity >= 5) {
       print_network_summary(writer, analysis.affected_flows(),
                             analysis.network_summary());
     }
   }
-  if (ignore_verbosity or m_opt_verbosity >= 6) {
+  if (m_opt_verbosity >= 6) {
     print_flows(writer, analysis.flow_graph().flow_tree());
-  } else if (ignore_verbosity or m_opt_verbosity >= 4) {
+  } else if (m_opt_verbosity >= 4) {
     print_flows(writer, analysis.affected_flows());
   }
-  if (ignore_verbosity or m_opt_verbosity >= 1) {
+  if (m_opt_verbosity >= 1) {
     print_errors(writer, analysis.loops_per_flow());
   }
   writer.EndObject();
@@ -406,13 +408,17 @@ enum class cmd_t : uint8_t {
 void process_cmd(nopticon::analysis_t &analysis, log_t &log,
                  rapidjson::Document &document) {
   assert(document["Command"].IsUint());
+  unsigned highest_verbosity;
   auto cmd = static_cast<cmd_t>(document["Command"].GetInt());
   switch (cmd) {
   case cmd_t::RESET_NETWORK_SUMMARY:
     analysis.reset_network_summary();
     break;
   case cmd_t::PRINT_LOG:
-    log.print(analysis, true);
+    highest_verbosity = 8;
+    std::swap(log.m_opt_verbosity, highest_verbosity);
+    log.print(analysis);
+    std::swap(log.m_opt_verbosity, highest_verbosity);
     break;
   default:
     std::cerr << "Unsupported gobgp-analysis command: "
@@ -491,7 +497,7 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
         auto ip_prefix = make_ip_prefix(nlri_value["prefix"].GetString());
         auto target = ip_to_nid.at(next_hop);
         analysis.insert_or_assign(ip_prefix, source, {target}, timestamp);
-        log.print(analysis, false);
+        log.print(analysis);
       }
     }
     auto &withdrawn_routes = bgp_update_body["WithdrawnRoutes"];
@@ -500,7 +506,7 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
       assert(withdrawn_route.HasMember("prefix"));
       auto ip_prefix = make_ip_prefix(withdrawn_route["prefix"].GetString());
       analysis.erase(ip_prefix, source, timestamp);
-      log.print(analysis, false);
+      log.print(analysis);
     }
   }
 }
@@ -556,7 +562,8 @@ static const char *const s_usage =
     "  \t    (requires --network-summary SPANS option)\n"
     "  \t6 - ... and information about all flows\n"
     "  \t7 - ... and network summary for all flows\n"
-    "  \t    (requires --network-summary SPANS option)\n";
+    "  \t    (requires --network-summary SPANS option)\n"
+    "  \t8 - ... and history of each inferred property\n";
 
 void print_usage() { std::cerr << s_usage; }
 
