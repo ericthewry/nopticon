@@ -8,6 +8,21 @@
 
 namespace nopticon {
 
+void history_t::refresh(timestamp_t timestamp) noexcept {
+  // If we're in 'stop', then set tail to new start;
+  // otherwise, cause tail to catch up with head.
+  bool is_stop = m_head & 1;
+  auto h = is_stop ? index(m_head + 1) : m_head;
+  for (auto& slice : m_slices) {
+    slice.duration = 0;
+    slice.tail = h;
+    assert(!(h & 1));
+  }
+  if (not is_stop) {
+    m_time_window[h] = timestamp;
+  }
+}
+
 rank_t history_t::rank(const slice_t &slice, timestamp_t global_start,
                        timestamp_t global_stop) const noexcept {
   constexpr float zero_div_guard = 0.00001;
@@ -86,22 +101,26 @@ void history_t::stop(timestamp_t current) { update_duration(true, current); }
 
 timestamps_t history_t::timestamps(timestamp_t global_end) const noexcept {
   duration_t duration = 0;
-  std::size_t tail = m_time_window.size();
+  auto tail = m_time_window.size();
   for (auto& slice : m_slices) {
-    if (slice.duration > duration) {
+    if (slice.duration >= duration) {
       tail = slice.tail;
     }
   }
-  if (tail >= m_time_window.size()) {
+  if (tail >= m_time_window.size() or ((m_head & 1) and index(m_head + 1) == tail)) {
     return {};
   }
+  auto i = tail;
   timestamps_t vec;
   vec.reserve(m_time_window.size());
-  vec.push_back(m_time_window[tail]);
-  for (auto i = tail + 1; i != m_head and vec.back() <= m_time_window[i]; ++i) {
+  for (;;) {
     vec.push_back(m_time_window[i]);
+    i = index(i + 1);
+    if (vec.back() > m_time_window[i] or i == tail) {
+      break;
+    }
   }
-  if ((vec.size() & 1) == 1) {
+  if (vec.size() & 1) {
     vec.push_back(global_end);
   }
   return vec;
@@ -130,6 +149,17 @@ void network_summary_t::reset() noexcept {
   for (auto &history_vec : m_tensor) {
     for (auto &history : history_vec) {
       history.reset();
+    }
+  }
+}
+
+void network_summary_t::refresh(timestamp_t timestamp) noexcept {
+  if (global_stop < timestamp) {
+    global_stop = timestamp;
+  }
+  for (auto &history_vec : m_tensor) {
+    for (auto &history : history_vec) {
+      history.refresh(timestamp);
     }
   }
 }

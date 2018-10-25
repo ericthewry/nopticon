@@ -72,8 +72,11 @@ public:
   /// Mark the time at which a property stops to hold
   void stop(timestamp_t);
 
-  /// Reset each slice
+  /// Reset each slice to its initial state
   void reset() noexcept;
+
+  /// Make each slice start at the given point in time
+  void refresh(timestamp_t) noexcept;
 
   timestamps_t timestamps(timestamp_t) const noexcept;
 
@@ -121,6 +124,7 @@ public:
   network_summary_t(const spans_t &, std::size_t);
 
   void reset() noexcept;
+  void refresh(timestamp_t) noexcept;
 
   /// Ordered according to their span, from longest to shortest
   const slices_t &slices(flow_id_t, nid_t, nid_t) const;
@@ -164,6 +168,10 @@ public:
   const flow_graph_t &flow_graph() const noexcept { return m_flow_graph; }
 
   void reset_network_summary() noexcept { m_network_summary.reset(); }
+
+  void refresh_network_summary(timestamp_t timestamp) noexcept {
+    m_network_summary.refresh(timestamp);
+  }
 
   const network_summary_t &network_summary() const noexcept {
     return m_network_summary;

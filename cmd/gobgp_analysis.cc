@@ -401,24 +401,34 @@ nopticon::ip_prefix_t make_ip_prefix(const std::string &ip_prefix) {
 }
 
 enum class cmd_t : uint8_t {
-  RESET_NETWORK_SUMMARY = 0,
-  PRINT_LOG,
+  PRINT_LOG = 0,
+  RESET_NETWORK_SUMMARY,
+  REFRESH_NETWORK_SUMMARY,
 };
 
 void process_cmd(nopticon::analysis_t &analysis, log_t &log,
                  rapidjson::Document &document) {
-  assert(document["Command"].IsUint());
+  assert(document["Command"].HasMember("Opcode"));
+  assert(document["Command"]["Opcode"].IsUint());
   unsigned highest_verbosity;
-  auto cmd = static_cast<cmd_t>(document["Command"].GetInt());
+  nopticon::timestamp_t timestamp;
+  auto opcode = document["Command"]["Opcode"].GetUint();
+  auto cmd = static_cast<cmd_t>(opcode);
   switch (cmd) {
-  case cmd_t::RESET_NETWORK_SUMMARY:
-    analysis.reset_network_summary();
-    break;
   case cmd_t::PRINT_LOG:
     highest_verbosity = 8;
     std::swap(log.m_opt_verbosity, highest_verbosity);
     log.print(analysis);
     std::swap(log.m_opt_verbosity, highest_verbosity);
+    break;
+  case cmd_t::RESET_NETWORK_SUMMARY:
+    analysis.reset_network_summary();
+    break;
+  case cmd_t::REFRESH_NETWORK_SUMMARY:
+    assert(document["Command"].HasMember("Timestamp"));
+    assert(document["Command"]["Timestamp"].IsUint());
+    timestamp = document["Command"]["Opcode"].GetUint();
+    analysis.refresh_network_summary(timestamp);
     break;
   default:
     std::cerr << "Unsupported gobgp-analysis command: "

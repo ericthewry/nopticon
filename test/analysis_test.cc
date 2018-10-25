@@ -209,10 +209,72 @@ static void test_analysis() {
              (19 - 7) / static_cast<float>(19 - 1));
 }
 
+static void test_refresh() {
+  const std::size_t number_of_nodes = 5;
+  const ip_prefix_t ip_prefix = ip_prefix_64_127;
+
+  spans_t spans{5};
+  analysis_t analysis{spans, number_of_nodes};
+
+  analysis.insert_or_assign(ip_prefix, 0, {1}, 1);
+  analysis.insert_or_assign(ip_prefix, 1, {2}, 2);
+  analysis.insert_or_assign(ip_prefix, 2, {3}, 3);
+  {
+    auto &ns = analysis.network_summary();
+    assert(ns.history(1, 0, 1).timestamps(4) == timestamps_t({1, 4}));
+    assert(ns.history(1, 1, 2).timestamps(4) == timestamps_t({2, 4}));
+    assert(ns.history(1, 2, 3).timestamps(4) == timestamps_t({3, 4}));
+    assert(ns.history(1, 0, 3).timestamps(4) == timestamps_t({3, 4}));
+  }
+  analysis.refresh_network_summary(5);
+  analysis.insert_or_assign(ip_prefix, 0, {3}, 6);
+  {
+    auto &ns = analysis.network_summary();
+    assert(ns.history(1, 0, 1).timestamps(7) == timestamps_t({5, 6}));
+    assert(ns.history(1, 1, 2).timestamps(7) == timestamps_t({5, 7}));
+    assert(ns.history(1, 2, 3).timestamps(7) == timestamps_t({5, 7}));
+    assert(ns.history(1, 0, 3).timestamps(7) == timestamps_t({5, 7}));
+  }
+  analysis.insert_or_assign(ip_prefix, 0, {1}, 7);
+  {
+    auto &ns = analysis.network_summary();
+    assert(ns.history(1, 0, 1).timestamps(8) == timestamps_t({5, 6, 7, 8}));
+    assert(ns.history(1, 1, 2).timestamps(8) == timestamps_t({5, 8}));
+    assert(ns.history(1, 2, 3).timestamps(8) == timestamps_t({5, 8}));
+    assert(ns.history(1, 0, 3).timestamps(8) == timestamps_t({5, 8}));
+  }
+  analysis.insert_or_assign(ip_prefix, 0, {3}, 9);
+  {
+    auto &ns = analysis.network_summary();
+    assert(ns.history(1, 0, 1).timestamps(10) == timestamps_t({5, 6, 7, 9}));
+    assert(ns.history(1, 1, 2).timestamps(10) == timestamps_t({5, 10}));
+    assert(ns.history(1, 2, 3).timestamps(10) == timestamps_t({5, 10}));
+    assert(ns.history(1, 0, 3).timestamps(10) == timestamps_t({5, 10}));
+  }
+  analysis.refresh_network_summary(11);
+  {
+    auto &ns = analysis.network_summary();
+    assert(ns.history(1, 0, 1).timestamps(12).empty());
+    assert(ns.history(1, 1, 2).timestamps(12) == timestamps_t({11, 12}));
+    assert(ns.history(1, 2, 3).timestamps(12) == timestamps_t({11, 12}));
+    assert(ns.history(1, 0, 3).timestamps(12) == timestamps_t({11, 12}));
+  }
+  analysis.insert_or_assign(ip_prefix, 0, {1}, 15);
+  analysis.erase(ip_prefix, 1, 15);
+  {
+    auto &ns = analysis.network_summary();
+    assert(ns.history(1, 0, 1).timestamps(17) == timestamps_t({15, 17}));
+    assert(ns.history(1, 1, 2).timestamps(17) == timestamps_t({11, 15}));
+    assert(ns.history(1, 2, 3).timestamps(17) == timestamps_t({11, 17}));
+    assert(ns.history(1, 0, 3).timestamps(17) == timestamps_t({11, 15}));
+  }
+}
+
 void run_analysis_test() {
   test_network_summary();
   test_history();
   test_loop();
   test_loop_with_different_ip_prefixes();
   test_analysis();
+  test_refresh();
 }
