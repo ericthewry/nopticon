@@ -30,7 +30,7 @@ def main():
         if (settings.peerchange and (bmp_msg._type == bmp.MessageType.PEER_UP 
             or bmp_msg._type == bmp.MessageType.PEER_DOWN)):
             ostream.write(nopticon.Command.print_log().json()+'\n')
-            ostream.write(nopticon.Command.reset_network_summary().json()+'\n')
+            ostream.write(nopticon.Command.refresh_network_summary().json()+'\n')
         ostream.write(bmp_json)
 
     # Close input and output streams

@@ -26,8 +26,9 @@ class NetworkSummary:
         return self._edges[flow]
 
 class CommandType(Enum):
-    RESET_NETWORK_SUMMARY = 0
-    PRINT_LOG = 1
+    PRINT_LOG = 0
+    RESET_NETWORK_SUMMARY = 1
+    REFRESH_NETWORK_SUMMARY = 2
 
 class Command():
     def __init__(self, cmd_type):
@@ -37,36 +38,60 @@ class Command():
         return json.dumps({'Command' : self._type.value})
 
     @classmethod
+    def print_log(cls):
+        return cls(CommandType.PRINT_LOG)
+
+    @classmethod
     def reset_network_summary(cls):
         return cls(CommandType.RESET_NETWORK_SUMMARY)
 
     @classmethod
-    def print_log(cls):
-        return cls(CommandType.PRINT_LOG)
+    def refresh_network_summary(cls):
+        return cls(CommandType.REFRESH_NETWORK_SUMMARY)
 
 """Convert policies JSON to a list of Policy objects"""
 def parse_policies(policies_json):
     policies_dict = json.loads(policies_json)
     policies = []
     for policy_dict in policies_dict['policies']:
-        if policy_dict['type'] == 'reachability':
+        if policy_dict['type'] == PolicyType.REACHABILITY.value:
             policies.append(ReachabilityPolicy(policy_dict))
+        elif policy_dict['type'] == PolicyType.PATH_PREFERENCE.value:
+            policies.append(PathPreferencePolicy(policy_dict))
     return policies
 
+class PolicyType(Enum):
+    REACHABILITY = "reachability"
+    PATH_PREFERENCE = "path-preference"
+
 class Policy:
-    def __init__(self, policy_dict):
-        self._type = policy_dict['type']
+    def __init__(self, typ, policy_dict):
+        self._type = typ
         self._flow = ipaddress.ip_network(policy_dict['flow'])
+
+    def isType(self, typ):
+        return self._type == typ
 
 class ReachabilityPolicy(Policy):
     def __init__(self, policy_dict):
-        assert policy_dict['type'] == 'reachability'
-        super().__init__(policy_dict)
+        super().__init__(PolicyType.REACHABILITY, policy_dict)
         self._source = policy_dict['source'][:10]
         self._target = policy_dict['target'][:10]
 
     def __str__(self):
         return '%s %s->%s' % (self._flow, self._source, self._target)
+
+class PathPreferencePolicy(Policy):
+    def __init__(self, policy_dict):
+        super().__init__(PolicyType.PATH_PREFERENCE, policy_dict)
+        self._paths = policy_dict['paths']
+        for path in self._paths:
+            for i in range(0, len(path)):
+                path[i] = path[i][:10]
+
+    def __str__(self):
+        return '%s %s' % (self._flow, 
+                ' > '.join(['->'.join(path) for path in self._paths]))
 
 """Convert rdns JSON to a dictionary of IPs to router names"""
 def parse_rdns(rdns_json):
