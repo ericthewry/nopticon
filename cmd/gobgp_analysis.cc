@@ -45,16 +45,16 @@ class log_t {
 public:
   log_t(std::streambuf *buffer, const nid_to_name_t &nid_to_name,
         unsigned opt_verbosity, bool opt_node_ids, float opt_rank_threshold,
-        const nopticon::spans_t opt_network_summary_spans)
+        const nopticon::spans_t opt_reach_summary_spans)
       : m_ostream(buffer), m_nid_to_name(nid_to_name),
         m_opt_node_ids{opt_node_ids}, m_opt_rank_threshold{opt_rank_threshold},
-        m_opt_verbosity{opt_verbosity}, m_opt_network_summary_spans{
-                                            opt_network_summary_spans} {}
+        m_opt_verbosity{opt_verbosity}, m_opt_reach_summary_spans{
+                                            opt_reach_summary_spans} {}
 
   void print(const nopticon::analysis_t &);
 
-  const nopticon::spans_t &opt_network_summary_spans() const noexcept {
-    return m_opt_network_summary_spans;
+  const nopticon::spans_t &opt_reach_summary_spans() const noexcept {
+    return m_opt_reach_summary_spans;
   }
 
 private:
@@ -68,12 +68,12 @@ private:
 
   void print_errors(writer_t &, const nopticon::loops_per_flow_t &) const;
 
-  void print_network_summary(writer_t &, const nopticon::flow_tree_t &,
-                             const nopticon::network_summary_t &) const;
-  void print_network_summary(writer_t &, const nopticon::affected_flows_t &,
-                             const nopticon::network_summary_t &) const;
-  void print_network_summary(writer_t &, const nopticon::const_flow_t,
-                             const nopticon::network_summary_t &) const;
+  void print_reach_summary(writer_t &, const nopticon::flow_tree_t &,
+                             const nopticon::reach_summary_t &) const;
+  void print_reach_summary(writer_t &, const nopticon::affected_flows_t &,
+                             const nopticon::reach_summary_t &) const;
+  void print_reach_summary(writer_t &, const nopticon::const_flow_t,
+                             const nopticon::reach_summary_t &) const;
 
   void print_nid(writer_t &, nopticon::nid_t) const;
 
@@ -83,7 +83,7 @@ private:
   bool m_opt_node_ids;
   float m_opt_rank_threshold;
   unsigned m_opt_verbosity;
-  nopticon::spans_t m_opt_network_summary_spans;
+  nopticon::spans_t m_opt_reach_summary_spans;
 };
 
 void log_t::print_nid(writer_t &writer, nopticon::nid_t nid) const {
@@ -159,9 +159,9 @@ void log_t::print_flows(writer_t &writer,
   writer.EndArray();
 }
 
-void log_t::print_network_summary(
+void log_t::print_reach_summary(
     writer_t &writer, const nopticon::const_flow_t flow,
-    const nopticon::network_summary_t &network_summary) const {
+    const nopticon::reach_summary_t &reach_summary) const {
   static constexpr const char *const s_rank_strings[] = {
       "rank-0", "rank-1", "rank-2", "rank-3", "rank-4",
       "rank-5", "rank-6", "rank-7", "rank-8", "rank-9"};
@@ -179,12 +179,12 @@ void log_t::print_network_summary(
       if (s == t) {
         continue;
       }
-      auto &history = network_summary.history(flow->id, s, t);
+      auto &history = reach_summary.history(flow->id, s, t);
       auto &slices = history.slices();
       if (slices.empty()) {
         continue;
       }
-      auto ranks = network_summary.ranks(history);
+      auto ranks = reach_summary.ranks(history);
       if (slices.size() == 2) {
         assert(ranks.size() == 2);
         auto distance = std::fabs(ranks.front() - ranks.back());
@@ -223,7 +223,7 @@ void log_t::print_network_summary(
       if (m_opt_verbosity >= 8) {
         writer.Key("history");
         writer.StartArray();
-        auto timestamps = history.timestamps(network_summary.global_stop);
+        auto timestamps = history.timestamps(reach_summary.global_stop);
         for (auto timestamp : timestamps) {
           writer.Uint(timestamp);
         }
@@ -238,26 +238,26 @@ void log_t::print_network_summary(
   }
 }
 
-void log_t::print_network_summary(
+void log_t::print_reach_summary(
     writer_t &writer, const nopticon::flow_tree_t &flow_tree,
-    const nopticon::network_summary_t &network_summary) const {
+    const nopticon::reach_summary_t &reach_summary) const {
   auto flow_tree_iter = flow_tree.iter();
-  writer.Key("network-summary");
+  writer.Key("reach-summary");
   writer.StartArray();
   do {
     auto flow = flow_tree_iter.ptr();
-    print_network_summary(writer, flow, network_summary);
+    print_reach_summary(writer, flow, reach_summary);
   } while (flow_tree_iter.next());
   writer.EndArray();
 }
 
-void log_t::print_network_summary(
+void log_t::print_reach_summary(
     writer_t &writer, const nopticon::affected_flows_t &affected_flows,
-    const nopticon::network_summary_t &network_summary) const {
-  writer.Key("network-summary");
+    const nopticon::reach_summary_t &reach_summary) const {
+  writer.Key("reach-summary");
   writer.StartArray();
   for (auto flow : affected_flows) {
-    print_network_summary(writer, flow, network_summary);
+    print_reach_summary(writer, flow, reach_summary);
   }
   writer.EndArray();
 }
@@ -313,13 +313,13 @@ void log_t::print(const nopticon::analysis_t &analysis) {
     }
     writer.EndArray();
   }
-  if (not m_opt_network_summary_spans.empty()) {
+  if (not m_opt_reach_summary_spans.empty()) {
     if (m_opt_verbosity >= 7) {
-      print_network_summary(writer, analysis.flow_graph().flow_tree(),
-                            analysis.network_summary());
+      print_reach_summary(writer, analysis.flow_graph().flow_tree(),
+                            analysis.reach_summary());
     } else if (m_opt_verbosity >= 5) {
-      print_network_summary(writer, analysis.affected_flows(),
-                            analysis.network_summary());
+      print_reach_summary(writer, analysis.affected_flows(),
+                            analysis.reach_summary());
     }
   }
   if (m_opt_verbosity >= 6) {
@@ -422,13 +422,13 @@ void process_cmd(nopticon::analysis_t &analysis, log_t &log,
     std::swap(log.m_opt_verbosity, highest_verbosity);
     break;
   case cmd_t::RESET_NETWORK_SUMMARY:
-    analysis.reset_network_summary();
+    analysis.reset_reach_summary();
     break;
   case cmd_t::REFRESH_NETWORK_SUMMARY:
     assert(document["Command"].HasMember("Timestamp"));
     assert(document["Command"]["Timestamp"].IsUint());
     timestamp = document["Command"]["Opcode"].GetUint();
-    analysis.refresh_network_summary(timestamp);
+    analysis.refresh_reach_summary(timestamp);
     break;
   default:
     std::cerr << "Unsupported gobgp-analysis command: "
@@ -439,7 +439,7 @@ void process_cmd(nopticon::analysis_t &analysis, log_t &log,
 void process_bmp_message(std::size_t number_of_nodes, FILE *file,
                          const string_to_nid_t &ip_to_nid, log_t &log) {
   assert(file != nullptr);
-  nopticon::analysis_t analysis{log.opt_network_summary_spans(),
+  nopticon::analysis_t analysis{log.opt_reach_summary_spans(),
                                 number_of_nodes};
   char read_buffer[std::numeric_limits<uint16_t>::max()];
   rapidjson::FileReadStream input(file, read_buffer, sizeof(read_buffer));
@@ -552,12 +552,12 @@ static const char *const s_usage =
     "  \tPrint node identifiers in JSON output\n\n"
     "  --log FILE\n"
     "  \tOutput results to FILE instead of stdout\n\n"
-    "  --network-summary SPANS\n"
+    "  --reach-summary SPANS\n"
     "  \tAnalyze a history of data planes where\n"
     "  \tSPANS is a comma-separated list of durations,\n"
     "  \tdenoting the length of sliding time windows\n\n"
     "  --rank-threshold DISTANCE\n"
-    "  \t(requires --network-summary SPANS option)\n"
+    "  \t(requires --reach-summary SPANS option)\n"
     "  \tIf network summary's |SPANS|=2, then report\n"
     "  \tonly those reachability properties whose\n"
     "  \tdifference in rank is greater than or equal\n"
@@ -569,10 +569,10 @@ static const char *const s_usage =
     "  \t1 - BMP messages that cause forwarding loops\n"
     "  \t4 - ... and information about affected flows\n"
     "  \t5 - ... and network summary for affected flows\n"
-    "  \t    (requires --network-summary SPANS option)\n"
+    "  \t    (requires --reach-summary SPANS option)\n"
     "  \t6 - ... and information about all flows\n"
     "  \t7 - ... and network summary for all flows\n"
-    "  \t    (requires --network-summary SPANS option)\n"
+    "  \t    (requires --reach-summary SPANS option)\n"
     "  \t8 - ... and history of each inferred property\n";
 
 void print_usage() { std::cerr << s_usage; }
@@ -592,7 +592,7 @@ int main(int argc, char **args) {
   const char *log_file_name = nullptr;
   bool opt_node_ids = false;
   float opt_rank_threshold = 0.0f;
-  nopticon::spans_t opt_network_summary_spans;
+  nopticon::spans_t opt_reach_summary_spans;
   unsigned opt_verbosity = 1;
   if (argc < 2) {
     print_usage();
@@ -619,18 +619,18 @@ int main(int argc, char **args) {
       assert(0.0f <= opt_rank_threshold);
       assert(opt_rank_threshold <= 1.0f);
     }
-    if (std::strcmp(args[i], "--network-summary") == 0) {
+    if (std::strcmp(args[i], "--reach-summary") == 0) {
       std::stringstream sstream{args[i + 1]};
       nopticon::duration_t span;
       while (sstream >> span) {
-        opt_network_summary_spans.push_back(span);
+        opt_reach_summary_spans.push_back(span);
         if (sstream.peek() == ',') {
           sstream.ignore();
         }
       }
-      assert(not opt_network_summary_spans.empty());
-      std::sort(opt_network_summary_spans.begin(),
-                opt_network_summary_spans.end());
+      assert(not opt_reach_summary_spans.empty());
+      std::sort(opt_reach_summary_spans.begin(),
+                opt_reach_summary_spans.end());
     }
   }
   rdns_file_name = args[argc - 1];
@@ -671,14 +671,14 @@ int main(int argc, char **args) {
             << (log_file_name == nullptr ? "stdout" : log_file_name)
             << std::endl
             << "network summary spans: "
-            << (opt_network_summary_spans.empty()
+            << (opt_reach_summary_spans.empty()
                     ? "<empty>"
-                    : join(opt_network_summary_spans))
+                    : join(opt_reach_summary_spans))
             << std::endl
             << "rank threshold: " << opt_rank_threshold << std::endl
             << "verbosity level: " << opt_verbosity << std::endl;
   log_t log{log_buffer,   nid_to_name,        opt_verbosity,
-            opt_node_ids, opt_rank_threshold, opt_network_summary_spans};
+            opt_node_ids, opt_rank_threshold, opt_reach_summary_spans};
   process_bmp_message(nid_to_name.size(), stdin, ip_to_nid, log);
   return EXIT_SUCCESS;
 }

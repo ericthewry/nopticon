@@ -134,18 +134,18 @@ void history_t::reset() noexcept {
   }
 }
 
-network_summary_t::network_summary_t(std::size_t number_of_nodes)
+reach_summary_t::reach_summary_t(std::size_t number_of_nodes)
     : spans{}, number_of_nodes{number_of_nodes} {
   assert(number_of_nodes <= analysis_t::MAX_NUMBER_OF_NODES);
 }
 
-network_summary_t::network_summary_t(const spans_t &spans,
+reach_summary_t::reach_summary_t(const spans_t &spans,
                                      std::size_t number_of_nodes)
     : spans{spans}, number_of_nodes{number_of_nodes} {
   assert(number_of_nodes <= analysis_t::MAX_NUMBER_OF_NODES);
 }
 
-void network_summary_t::reset() noexcept {
+void reach_summary_t::reset() noexcept {
   for (auto &history_vec : m_tensor) {
     for (auto &history : history_vec) {
       history.reset();
@@ -153,7 +153,7 @@ void network_summary_t::reset() noexcept {
   }
 }
 
-void network_summary_t::refresh(timestamp_t timestamp) noexcept {
+void reach_summary_t::refresh(timestamp_t timestamp) noexcept {
   if (global_stop < timestamp) {
     global_stop = timestamp;
   }
@@ -164,7 +164,7 @@ void network_summary_t::refresh(timestamp_t timestamp) noexcept {
   }
 }
 
-ranks_t network_summary_t::ranks(const history_t &history) const {
+ranks_t reach_summary_t::ranks(const history_t &history) const {
   ranks_t ranks;
   ranks.reserve(history.slices().size());
   for (auto &slice : history.slices()) {
@@ -173,7 +173,7 @@ ranks_t network_summary_t::ranks(const history_t &history) const {
   return ranks;
 }
 
-const slices_t &network_summary_t::slices(flow_id_t flow_id, nid_t s,
+const slices_t &reach_summary_t::slices(flow_id_t flow_id, nid_t s,
                                           nid_t t) const {
   static slices_t s_empty_slices;
   if (flow_id >= m_tensor.size()) {
@@ -187,7 +187,7 @@ const slices_t &network_summary_t::slices(flow_id_t flow_id, nid_t s,
   return history_vec[index].slices();
 }
 
-history_vec_t &network_summary_t::history_vec(flow_id_t flow_id) {
+history_vec_t &reach_summary_t::history_vec(flow_id_t flow_id) {
   if (flow_id >= m_tensor.size()) {
     auto old_size = m_tensor.size();
     m_tensor.resize((flow_id + 1) << 1);
@@ -201,7 +201,7 @@ history_vec_t &network_summary_t::history_vec(flow_id_t flow_id) {
   return m_tensor[flow_id];
 }
 
-const history_t &network_summary_t::history(flow_id_t flow_id, nid_t s,
+const history_t &reach_summary_t::history(flow_id_t flow_id, nid_t s,
                                             nid_t t) const {
   static history_t s_empty_history{spans_t{}};
   if (flow_id >= m_tensor.size()) {
@@ -215,7 +215,7 @@ const history_t &network_summary_t::history(flow_id_t flow_id, nid_t s,
   return history_vec[index];
 }
 
-history_t &network_summary_t::history(flow_id_t flow_id, nid_t s, nid_t t) {
+history_t &reach_summary_t::history(flow_id_t flow_id, nid_t s, nid_t t) {
   auto &hv = history_vec(flow_id);
   auto index = make_index(s, t);
   assert(index < hv.size());
@@ -312,26 +312,26 @@ void analysis_t::clean_up() {
   }
 }
 
-void analysis_t::update_network_summary(timestamp_t timestamp) {
+void analysis_t::update_reach_summary(timestamp_t timestamp) {
   ip_addr_vec_t stack;
   std::bitset<MAX_NUMBER_OF_NODES> bitset;
-  stack.reserve(m_network_summary.number_of_nodes);
+  stack.reserve(m_reach_summary.number_of_nodes);
 
-  if (timestamp < m_network_summary.global_start) {
-    m_network_summary.global_start = timestamp;
+  if (timestamp < m_reach_summary.global_start) {
+    m_reach_summary.global_start = timestamp;
   }
-  if (m_network_summary.global_stop < timestamp) {
-    m_network_summary.global_stop = timestamp;
+  if (m_reach_summary.global_stop < timestamp) {
+    m_reach_summary.global_stop = timestamp;
   }
 
   for (auto flow : m_affected_flows) {
     assert(stack.empty());
-    auto &history_vec = m_network_summary.history_vec(flow->id);
+    auto &history_vec = m_reach_summary.history_vec(flow->id);
     auto &rule_ref_per_source = flow->data;
     for (auto &kv : rule_ref_per_source) {
       assert(stack.empty());
       auto start = kv.first;
-      auto base_index = m_network_summary.number_of_nodes * start;
+      auto base_index = m_reach_summary.number_of_nodes * start;
       stack.push_back(start);
       while (not stack.empty()) {
         auto n = stack.back();
@@ -375,7 +375,7 @@ bool analysis_t::insert_or_assign(const ip_prefix_t &ip_prefix, source_t source,
   clean_up();
   find_loops(source, m_affected_flows, m_loops_per_flow);
   if (timestamp != 0) {
-    update_network_summary(timestamp);
+    update_reach_summary(timestamp);
   }
   return status;
 }
@@ -387,7 +387,7 @@ bool analysis_t::erase(const ip_prefix_t &ip_prefix, source_t source,
   clean_up();
   find_loops(source, m_affected_flows, m_loops_per_flow);
   if (timestamp != 0) {
-    update_network_summary(timestamp);
+    update_reach_summary(timestamp);
   }
   return status;
 }

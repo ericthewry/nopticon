@@ -87,7 +87,7 @@ public:
   const timestamps_t &time_window() const noexcept { return m_time_window; }
 
 private:
-  friend class network_summary_t;
+  friend class reach_summary_t;
 
   rank_t rank(const slice_t &, timestamp_t, timestamp_t) const noexcept;
 
@@ -114,14 +114,14 @@ private:
 
 typedef std::vector<history_t> history_vec_t;
 
-class network_summary_t {
+class reach_summary_t {
 public:
   const spans_t spans;
   const std::size_t number_of_nodes;
   timestamp_t global_start = std::numeric_limits<timestamp_t>::max(),
               global_stop = 0;
-  network_summary_t(std::size_t);
-  network_summary_t(const spans_t &, std::size_t);
+  reach_summary_t(std::size_t);
+  reach_summary_t(const spans_t &, std::size_t);
 
   void reset() noexcept;
   void refresh(timestamp_t) noexcept;
@@ -151,10 +151,10 @@ public:
   constexpr static std::size_t MAX_NUMBER_OF_NODES = 4096;
 
   analysis_t(std::size_t number_of_nodes)
-      : m_network_summary{spans_t{}, number_of_nodes} {}
+      : m_reach_summary{spans_t{}, number_of_nodes} {}
 
   analysis_t(const spans_t &spans, std::size_t number_of_nodes)
-      : m_network_summary{spans, number_of_nodes} {}
+      : m_reach_summary{spans, number_of_nodes} {}
 
   /// Returns true when a new rule has been created; false otherwise
   bool insert_or_assign(const ip_prefix_t &, source_t, const target_t &,
@@ -167,14 +167,14 @@ public:
 
   const flow_graph_t &flow_graph() const noexcept { return m_flow_graph; }
 
-  void reset_network_summary() noexcept { m_network_summary.reset(); }
+  void reset_reach_summary() noexcept { m_reach_summary.reset(); }
 
-  void refresh_network_summary(timestamp_t timestamp) noexcept {
-    m_network_summary.refresh(timestamp);
+  void refresh_reach_summary(timestamp_t timestamp) noexcept {
+    m_reach_summary.refresh(timestamp);
   }
 
-  const network_summary_t &network_summary() const noexcept {
-    return m_network_summary;
+  const reach_summary_t &reach_summary() const noexcept {
+    return m_reach_summary;
   }
 
   const loops_per_flow_t &loops_per_flow() const noexcept {
@@ -187,12 +187,12 @@ public:
 
 private:
   void clean_up();
-  void update_network_summary(timestamp_t);
+  void update_reach_summary(timestamp_t);
 
   flow_graph_t m_flow_graph;
   affected_flows_t m_affected_flows;
   loops_per_flow_t m_loops_per_flow;
-  network_summary_t m_network_summary;
+  reach_summary_t m_reach_summary;
 };
 
 } // namespace nopticon
