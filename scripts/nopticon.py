@@ -6,13 +6,13 @@ from enum import Enum
 import ipaddress
 import json
 
-class NetworkSummary:
+class ReachSummary:
     def __init__(self, summary_json):
         self._summary = json.loads(summary_json)
 
         # Extract edges
         self._edges = {}
-        for flow in self._summary['network-summary']:
+        for flow in self._summary['reach-summary']:
             flow_prefix = ipaddress.ip_network(flow['flow'])
             flow_edges = {}
             for edge_details in flow['edges']:

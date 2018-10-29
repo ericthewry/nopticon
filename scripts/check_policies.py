@@ -28,7 +28,7 @@ def main():
     # Load summary
     with open(settings.summary_path, 'r') as sf:
         summary_json = sf.read()
-    summary = nopticon.NetworkSummary(summary_json)
+    summary = nopticon.ReachSummary(summary_json)
 
     # Load policies
     with open(settings.policies_path, 'r') as pf:
