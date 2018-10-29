@@ -35,19 +35,24 @@ class Command():
         self._type = cmd_type
 
     def json(self):
-        return json.dumps({'Command' : self._type.value})
+        cmd = {'Command' : {'Opcode' : self._type.value}}
+        if self._type == CommandType.REFRESH_NETWORK_SUMMARY:
+            cmd['Command']['Timestamp'] = self._timestamp
+        return json.dumps(cmd)
 
     @classmethod
     def print_log(cls):
         return cls(CommandType.PRINT_LOG)
 
     @classmethod
-    def reset_network_summary(cls):
+    def reset_summary(cls):
         return cls(CommandType.RESET_NETWORK_SUMMARY)
 
     @classmethod
-    def refresh_network_summary(cls):
-        return cls(CommandType.REFRESH_NETWORK_SUMMARY)
+    def refresh_summary(cls, timestamp):
+        obj = cls(CommandType.REFRESH_NETWORK_SUMMARY)
+        obj._timestamp = timestamp
+        return obj
 
 """Convert policies JSON to a list of Policy objects"""
 def parse_policies(policies_json):

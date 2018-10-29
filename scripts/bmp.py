@@ -40,6 +40,11 @@ class Message:
             return '%s' % (self._type.name)
         else:
             return '%s from %s:%d' % (self._type.name, self._src_id, self._src_as)
+    def isPeerUp(self):
+        return self._type == MessageType.PEER_UP
+
+    def isPeerDown(self):
+        return self._type == MessageType.PEER_DOWN
 
 class PeerDownMessage(Message):
     def __init__(self, msg_dict):

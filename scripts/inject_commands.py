@@ -27,10 +27,11 @@ def main():
     # Process input stream
     for bmp_json in istream.readlines():
         bmp_msg = bmp.parse_message(bmp_json.strip())
-        if (settings.peerchange and (bmp_msg._type == bmp.MessageType.PEER_UP 
-            or bmp_msg._type == bmp.MessageType.PEER_DOWN)):
+        if (settings.peerchange 
+                and (bmp_msg.isPeerUp() or bmp_msg.isPeerDown())):
             ostream.write(nopticon.Command.print_log().json()+'\n')
-            ostream.write(nopticon.Command.refresh_network_summary().json()+'\n')
+            refresh = nopticon.Command.refresh_summary(bmp_msg._timestamp)
+            ostream.write(refresh.json()+'\n')
         ostream.write(bmp_json)
 
     # Close input and output streams
