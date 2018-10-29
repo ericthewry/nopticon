@@ -1,4 +1,4 @@
-CXX_FLAGS += --std=c++11 -Wall -I./src
+CXX_FLAGS += --std=c++11 -Wall -I./src -g
 
 BUILD_DIR = build
 
