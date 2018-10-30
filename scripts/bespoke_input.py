@@ -36,7 +36,6 @@ class Update:
         """
         Returns a string representing the rule update in GoBGP format
         """
-        print(str(rDNS))
         if self.is_widthdraw:
             bgp = {"Header": {"Type" : 0},
                    "PeerHeader" : {"PeerBGPID" : rDNS[self.source][self.target]["source"],
@@ -52,7 +51,6 @@ class Update:
                    }
             }
         else:
-            print(rDNS, str([self.source]), str([self.target]))
             bgp = {"Header": {"Type" : 0},
                    "PeerHeader" : {"PeerBGPID" : rDNS[self.source][self.target]["source"],
                                    "Timestamp" : int(self.timestamp)},
@@ -100,7 +98,6 @@ class NetworkScript:
         self.routers = list(set([r for pair in links for r in pair ]))
         self.rDNS_json = {"routers" : []}
         self.rDNS_logical = {}
-        print("routers:", self.routers)
         for i,r in enumerate(self.routers):
             ifaces = []
             for s, t in links:
