@@ -426,7 +426,7 @@ void process_cmd(nopticon::analysis_t &analysis, log_t &log,
   case cmd_t::REFRESH_NETWORK_SUMMARY:
     assert(document["Command"].HasMember("Timestamp"));
     assert(document["Command"]["Timestamp"].IsUint());
-    timestamp = document["Command"]["Opcode"].GetUint();
+    timestamp = document["Command"]["Timestamp"].GetUint();
     analysis.refresh_reach_summary(timestamp);
     break;
   default:
