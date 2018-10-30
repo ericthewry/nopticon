@@ -392,4 +392,56 @@ bool analysis_t::erase(const ip_prefix_t &ip_prefix, source_t source,
   return status;
 }
 
+timestamps_t intersect(const timestamps_t &a, const timestamps_t &b) {
+  if (a.empty() or b.empty()) {
+    return {};
+  }
+  assert(std::is_sorted(a.begin(), a.end()));
+  assert(std::is_sorted(b.begin(), b.end()));
+  assert(!(a.size() & 1));
+  assert(!(b.size() & 1));
+  timestamps_t c;
+  c.reserve(std::max(a.size(), b.size()));
+
+  constexpr bool A = 0, B = 1;
+  timestamps_t::size_type more_array[] = {a.size(), b.size()};
+  timestamps_t::const_iterator iter_array[] = {a.cbegin(), b.cbegin()};
+  timestamp_t low[] = {-1ULL, -1ULL}, high[] = {0ULL, 0ULL};
+
+  auto advance = [&](bool index) {
+    auto& _iter = iter_array[index];
+    auto& _more = more_array[index];
+    auto& _low = low[index];
+    auto& _high = high[index];
+    assert(2 <= _more);
+    _more -= 2;
+    _low = *(_iter++);
+    _high = *(_iter++);
+    assert(_low != 0);
+    assert(_high != 0);
+    assert(_low <= _high);
+  };
+  auto process_both_intervals = [&]() {
+    if (low[A] <= high[B] and low[B] <= high[A]) {
+      c.push_back(std::max(low[A], low[B]));
+      c.push_back(std::min(high[A], high[B]));
+    }
+  };
+  while (more_array[A] and more_array[B]) {
+    if (high[A] < high[B]) {
+      advance(A);
+    } else {
+      advance(B);
+    }
+    process_both_intervals();
+  }
+  for (auto select : {A, B}) {
+    while (more_array[select]) {
+      advance(select);
+      process_both_intervals();
+    }
+  }
+  return c;
+}
+
 } // namespace nopticon

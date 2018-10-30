@@ -195,4 +195,6 @@ private:
   reach_summary_t m_reach_summary;
 };
 
+timestamps_t intersect(const timestamps_t &, const timestamps_t &);
+
 } // namespace nopticon

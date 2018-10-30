@@ -270,6 +270,22 @@ static void test_refresh() {
   }
 }
 
+static void test_intersection_of_timestamps() {
+  const timestamps_t x{{3, 7}}, y{{5, 9}}, z{{4, 6}};
+  assert(intersect(x, y) == timestamps_t({5, 7}));
+  assert(intersect(y, x) == timestamps_t({5, 7}));
+  assert(intersect(y, z) == timestamps_t({5, 6}));
+  assert(intersect(z, y) == timestamps_t({5, 6}));
+  const timestamps_t u{{1, 3, 5, 8, 9, 15}}, v{{1, 5}}, w{{5, 12}};
+  assert(intersect(u, v) == timestamps_t({1, 3, 5, 5}));
+  assert(intersect(v, u) == timestamps_t({1, 3, 5, 5}));
+  assert(intersect(u, w) == timestamps_t({5, 8, 9, 12}));
+  assert(intersect(w, u) == timestamps_t({5, 8, 9, 12}));
+  const timestamps_t p{{1, 3, 5, 7, 8, 9}}, q{{2, 4, 6, 7}};
+  assert(intersect(p, q) == timestamps_t({2, 3, 6, 7}));
+  assert(intersect(q, p) == timestamps_t({2, 3, 6, 7}));
+}
+
 void run_analysis_test() {
   test_reach_summary();
   test_history();
@@ -277,4 +293,5 @@ void run_analysis_test() {
   test_loop_with_different_ip_prefixes();
   test_analysis();
   test_refresh();
+  test_intersection_of_timestamps();
 }
