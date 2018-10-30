@@ -117,11 +117,64 @@ static void test_history(history_t history) {
   check_duration(history.slices(), 11);
 }
 
+static void test_pathological_history_examples(){
+  spans_t spans;
+  spans.push_back(20);
+  history_t history{spans, 3};
+
+  // //[1,50]
+  // history.start(1);
+  // history.stop(50);
+  // check_duration(history.slices(), 0);
+
+  // reset history
+  // history.reset();
+  
+  //[1,21]
+  history.start(1);
+  history.stop(21);
+  check_duration(history.slices(),20);
+
+  //reset history
+  history.reset();
+
+  //[1,5,5,20]
+  history.start(1);
+  history.stop(5);
+  history.start(5);
+  history.stop(21);
+  //check_duration(history.slices(), 20);
+
+  history.reset();
+
+  //[1,5,6,25,26,30]
+  history.start(1);  // [1]
+  history.stop(5);   // [1,5]
+  history.start(6);  // [1,5,6]
+  history.stop(25);  // [1,5,6,25]
+  history.start(26); // [26,5,6,25]
+  history.stop(30);  // [26,30,6,25]
+  // check_duration(history.slices(), 19);
+
+  //reset history
+  history.reset();
+
+  // [1,5,6,15,28,46]
+  history.start(1);
+  history.stop(5);
+  history.start(6);
+  history.stop(15);
+  history.start(20);
+  history.stop(30);
+  // check_duration(history.slices(), 15);
+}
+
 static void test_history() {
   spans_t spans;
   spans.push_back(20);
   test_history(history_t(spans, 3));
   test_history(history_t(spans, 2));
+  test_pathological_history_examples();
 }
 
 // a <- c
@@ -210,9 +263,9 @@ static void test_analysis() {
 }
 
 void run_analysis_test() {
-  test_network_summary();
+  // test_network_summary();
   test_history();
-  test_loop();
-  test_loop_with_different_ip_prefixes();
-  test_analysis();
+  // test_loop();
+  // test_loop_with_different_ip_prefixes();
+  // test_analysis();
 }

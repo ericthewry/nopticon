@@ -41,7 +41,7 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
   }
   m_time_window.at(m_head = index(m_head + 1)) = current;
   if (is_stop) {
-    assert(m_head & 1);
+    assert(m_head & 1); // current head is a start idx, expecting a stop
     auto next_head = index(m_head + 1);
     for (auto &slice : m_slices) {
       auto &d = slice.duration;
@@ -50,7 +50,7 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
       d += current - newest;
       auto actual_span = slice.span();
       for (;;) {
-        assert(!(tail & 1));
+        assert(!(tail & 1)); // tail is a stop idx (even)
         auto oldest_start = oldest_start_time(slice);
         assert(oldest_start != 0);
         assert(oldest_start <= newest);
