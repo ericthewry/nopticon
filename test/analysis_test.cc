@@ -13,12 +13,12 @@ static void check_duration(const slices_t &slices, duration_t d) {
   assert(slices.front().duration == d);
 }
 
-static void check_rank(const network_summary_t &network_summary,
+static void check_rank(const reach_summary_t &reach_summary,
                        const history_t &history, double rank) {
   constexpr double epsilon = 0.001;
   auto &slices = history.slices();
   assert(slices.size() == 1);
-  auto ranks = network_summary.ranks(history);
+  auto ranks = reach_summary.ranks(history);
   assert(ranks.size() == 1);
   auto slice_rank = ranks.front();
   assert(slice_rank <= 1.0);
@@ -26,44 +26,44 @@ static void check_rank(const network_summary_t &network_summary,
   assert(slice_rank >= rank - epsilon);
 }
 
-static void test_network_summary() {
+static void test_reach_summary() {
   spans_t spans;
   spans.push_back(10000);
-  network_summary_t network_summary{spans, 8};
-  auto &history_a = network_summary.history(1, 3, 5);
+  reach_summary_t reach_summary{spans, 8};
+  auto &history_a = reach_summary.history(1, 3, 5);
   assert(history_a.slices().size() == 1);
   history_a.start(1);
   history_a.stop(13);
   {
-    const auto &ns = network_summary;
-    check_duration(ns.slices(1, 3, 5), 12);
-    check_duration(ns.slices(0, 3, 5), 0);
-    check_duration(ns.slices(1, 2, 5), 0);
-    check_duration(ns.slices(1, 3, 4), 0);
+    const auto &rs = reach_summary;
+    check_duration(rs.slices(1, 3, 5), 12);
+    check_duration(rs.slices(0, 3, 5), 0);
+    check_duration(rs.slices(1, 2, 5), 0);
+    check_duration(rs.slices(1, 3, 4), 0);
   }
-  auto &history_b = network_summary.history(1, 4, 5);
+  auto &history_b = reach_summary.history(1, 4, 5);
   assert(history_b.slices().size() == 1);
   history_b.start(2);
   history_b.stop(17);
   {
-    const auto &ns = network_summary;
-    check_duration(ns.slices(1, 3, 5), 12);
-    check_duration(ns.slices(1, 4, 5), 15);
-    check_duration(ns.slices(0, 3, 5), 0);
-    check_duration(ns.slices(1, 2, 5), 0);
-    check_duration(ns.slices(1, 3, 4), 0);
+    const auto &rs = reach_summary;
+    check_duration(rs.slices(1, 3, 5), 12);
+    check_duration(rs.slices(1, 4, 5), 15);
+    check_duration(rs.slices(0, 3, 5), 0);
+    check_duration(rs.slices(1, 2, 5), 0);
+    check_duration(rs.slices(1, 3, 4), 0);
   }
-  auto &history_c = network_summary.history(1, 4, 7);
+  auto &history_c = reach_summary.history(1, 4, 7);
   assert(history_c.slices().size() == 1);
   history_c.start(5);
   history_c.stop(22);
   {
-    const auto &ns = network_summary;
-    check_duration(ns.slices(1, 3, 5), 12);
-    check_duration(ns.slices(1, 4, 5), 15);
-    check_duration(ns.slices(1, 4, 7), 17);
-    check_duration(ns.slices(1, 2, 5), 0);
-    check_duration(ns.slices(1, 3, 4), 0);
+    const auto &rs = reach_summary;
+    check_duration(rs.slices(1, 3, 5), 12);
+    check_duration(rs.slices(1, 4, 5), 15);
+    check_duration(rs.slices(1, 4, 7), 17);
+    check_duration(rs.slices(1, 2, 5), 0);
+    check_duration(rs.slices(1, 3, 4), 0);
   }
 }
 
@@ -107,7 +107,7 @@ static void test_history(history_t history) {
   history.stop(25);  // STOP: [3,7,12,15,18,20,22,25]
   check_duration(history.slices(), 8);
 
-  // span is filled, so no extension, instead wrap around in ring buffer
+  // span is filled, so no extersion, irstead wrap around in ring buffer
   history.start(28); // START: [28,7,12,15,18,20,22]
   history.stop(32);  // STOP: [28,32,12,15,18,20,22,25]
   check_duration(history.slices(), 12);
@@ -244,28 +244,90 @@ static void test_analysis() {
   analysis.insert_or_assign(ip_prefix, 4, {5}, 2);
   analysis.insert_or_assign(ip_prefix, 4, {7}, 7);
   analysis.erase(ip_prefix, 3, 19);
-  auto &network_summary = analysis.network_summary();
-  auto &history_3_5 = network_summary.history(1, 3, 5);
+  auto &reach_summary = analysis.reach_summary();
+  auto &history_3_5 = reach_summary.history(1, 3, 5);
   assert(history_3_5.slices().size() == 1);
   assert(history_3_5.slices().front().duration == 18);
-  check_rank(network_summary, history_3_5, 1.0);
+  check_rank(reach_summary, history_3_5, 1.0);
 
-  auto &history_4_5 = network_summary.history(1, 4, 5);
+  auto &history_4_5 = reach_summary.history(1, 4, 5);
   assert(history_4_5.slices().size() == 1);
   assert(history_4_5.slices().front().duration == 5);
-  check_rank(network_summary, history_4_5, 5 / static_cast<float>(19 - 1));
+  check_rank(reach_summary, history_4_5, 5 / static_cast<float>(19 - 1));
 
-  auto &history_4_7 = network_summary.history(1, 4, 7);
+  auto &history_4_7 = reach_summary.history(1, 4, 7);
   assert(history_4_7.slices().size() == 1);
   assert(history_4_7.slices().front().duration == 0);
-  check_rank(network_summary, history_4_7,
+  check_rank(reach_summary, history_4_7,
              (19 - 7) / static_cast<float>(19 - 1));
 }
 
+static void test_refresh() {
+  const std::size_t number_of_nodes = 5;
+  const ip_prefix_t ip_prefix = ip_prefix_64_127;
+
+  spans_t spans{5};
+  analysis_t analysis{spans, number_of_nodes};
+
+  analysis.insert_or_assign(ip_prefix, 0, {1}, 1);
+  analysis.insert_or_assign(ip_prefix, 1, {2}, 2);
+  analysis.insert_or_assign(ip_prefix, 2, {3}, 3);
+  {
+    auto &rs = analysis.reach_summary();
+    assert(rs.history(1, 0, 1).timestamps(4) == timestamps_t({1, 4}));
+    assert(rs.history(1, 1, 2).timestamps(4) == timestamps_t({2, 4}));
+    assert(rs.history(1, 2, 3).timestamps(4) == timestamps_t({3, 4}));
+    assert(rs.history(1, 0, 3).timestamps(4) == timestamps_t({3, 4}));
+  }
+  analysis.refresh_reach_summary(5);
+  analysis.insert_or_assign(ip_prefix, 0, {3}, 6);
+  {
+    auto &rs = analysis.reach_summary();
+    assert(rs.history(1, 0, 1).timestamps(7) == timestamps_t({5, 6}));
+    assert(rs.history(1, 1, 2).timestamps(7) == timestamps_t({5, 7}));
+    assert(rs.history(1, 2, 3).timestamps(7) == timestamps_t({5, 7}));
+    assert(rs.history(1, 0, 3).timestamps(7) == timestamps_t({5, 7}));
+  }
+  analysis.insert_or_assign(ip_prefix, 0, {1}, 7);
+  {
+    auto &rs = analysis.reach_summary();
+    assert(rs.history(1, 0, 1).timestamps(8) == timestamps_t({5, 6, 7, 8}));
+    assert(rs.history(1, 1, 2).timestamps(8) == timestamps_t({5, 8}));
+    assert(rs.history(1, 2, 3).timestamps(8) == timestamps_t({5, 8}));
+    assert(rs.history(1, 0, 3).timestamps(8) == timestamps_t({5, 8}));
+  }
+  analysis.insert_or_assign(ip_prefix, 0, {3}, 9);
+  {
+    auto &rs = analysis.reach_summary();
+    assert(rs.history(1, 0, 1).timestamps(10) == timestamps_t({5, 6, 7, 9}));
+    assert(rs.history(1, 1, 2).timestamps(10) == timestamps_t({5, 10}));
+    assert(rs.history(1, 2, 3).timestamps(10) == timestamps_t({5, 10}));
+    assert(rs.history(1, 0, 3).timestamps(10) == timestamps_t({5, 10}));
+  }
+  analysis.refresh_reach_summary(11);
+  {
+    auto &rs = analysis.reach_summary();
+    assert(rs.history(1, 0, 1).timestamps(12).empty());
+    assert(rs.history(1, 1, 2).timestamps(12) == timestamps_t({11, 12}));
+    assert(rs.history(1, 2, 3).timestamps(12) == timestamps_t({11, 12}));
+    assert(rs.history(1, 0, 3).timestamps(12) == timestamps_t({11, 12}));
+  }
+  analysis.insert_or_assign(ip_prefix, 0, {1}, 15);
+  analysis.erase(ip_prefix, 1, 15);
+  {
+    auto &rs = analysis.reach_summary();
+    assert(rs.history(1, 0, 1).timestamps(17) == timestamps_t({15, 17}));
+    assert(rs.history(1, 1, 2).timestamps(17) == timestamps_t({11, 15}));
+    assert(rs.history(1, 2, 3).timestamps(17) == timestamps_t({11, 17}));
+    assert(rs.history(1, 0, 3).timestamps(17) == timestamps_t({11, 15}));
+  }
+}
+
 void run_analysis_test() {
-  // test_network_summary();
+  test_reach_summary();
   test_history();
-  // test_loop();
-  // test_loop_with_different_ip_prefixes();
-  // test_analysis();
+  test_loop();
+  test_loop_with_different_ip_prefixes();
+  test_analysis();
+  test_refresh();
 }
