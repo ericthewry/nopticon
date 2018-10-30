@@ -193,6 +193,7 @@ void log_t::print_reach_summary(
           continue;
         }
       }
+      
       bool non_zero_rank = false;
       for (auto rank : ranks) {
         if (rank != 0.0f) {
@@ -301,6 +302,7 @@ void log_t::print(const nopticon::analysis_t &analysis) {
   rapidjson::StringBuffer s;
   writer_t writer{s};
   writer.StartObject();
+  // If the --node-ids option was enabled
   if (m_opt_node_ids) {
     writer.Key("nodes");
     writer.StartArray();
@@ -314,6 +316,7 @@ void log_t::print(const nopticon::analysis_t &analysis) {
     }
     writer.EndArray();
   }
+  // If at least one span was passed as an argument!
   if (not m_opt_reach_summary_spans.empty()) {
     if (m_opt_verbosity >= 7) {
       print_reach_summary(writer, analysis.flow_graph().flow_tree(),
@@ -489,6 +492,8 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
     if (peer_header["Timestamp"].IsUint64()) {
       // Convert time in seconds and to time in milliseconds
       timestamp = peer_header["Timestamp"].GetUint64() * MILLISECONDS_PER_SECOND;
+    if (peer_header["Timestamp"].IsUint()) {
+      timestamp = peer_header["Timestamp"].GetUint() * 1000;
     } else {
       // Convert time in seconds and nanoseconds to time in milliseconds
       assert(peer_header["Timestamp"].IsDouble());

@@ -5,6 +5,7 @@
 #include "ipv4_test_data.hh"
 
 #include <analysis.hh>
+#include <iostream>
 
 #include <random>
 
@@ -12,6 +13,10 @@ using namespace nopticon;
 
 static void check_duration(const slices_t &slices, duration_t d) {
   assert(slices.size() == 1);
+  if (slices.front().duration != d){
+    std::cout << "Got duration " << slices.front().duration << "," << std::endl
+	      << "but expected " << d << std::endl;
+  }
   assert(slices.front().duration == d);
 }
 
@@ -119,11 +124,74 @@ static void test_history(history_t history) {
   check_duration(history.slices(), 11);
 }
 
+static void test_pathological_history_examples(){
+  spans_t spans;
+  spans.push_back(20);
+  history_t history{spans, 3};
+
+  //[1,50]
+  history.start(1);
+  history.stop(50);
+  check_duration(history.slices(), 20);
+
+  // reset history
+  history.reset();
+  
+  //[1,21]
+  history.start(1);
+  history.stop(21);
+  check_duration(history.slices(),20);
+
+  // reset
+  history.reset();
+
+  // [1541089737329,1541089738324,1541089783864,1541089783886]
+  history.start(1541089737329);
+  history.stop(1541089738324);
+  history.start(1541089783864);
+  history.stop(1541089783886);
+  check_duration(history.slices(), 20);
+  
+  //reset history
+  history.reset();
+
+  //[1,5,6,21]
+  history.start(1);
+  history.stop(5);
+  history.start(6);
+  history.stop(21);
+  check_duration(history.slices(),19);
+
+  history.reset();
+
+  //[1,5,6,25,26,30]
+  history.start(1);  // [1]
+  history.stop(5);   // [1,5]
+  history.start(6);  // [1,5,6]
+  history.stop(25);  // [1,5,6,25]
+  history.start(26); // [26,5,6,25]
+  history.stop(30);  // [26,30,6,25]
+  check_duration(history.slices(), 4);
+
+  //reset history
+  history.reset();
+
+  // [1,5,6,15,20,45]
+  history.start(1);
+  history.stop(5);
+  history.start(6);
+  history.stop(15);
+  history.start(20);
+  history.stop(45);
+  check_duration(history.slices(), 20);
+}
+
 static void test_history() {
   spans_t spans;
   spans.push_back(20);
   test_history(history_t(spans, 3));
   test_history(history_t(spans, 2));
+  test_pathological_history_examples();
 }
 
 // a <- c
@@ -166,11 +234,11 @@ static void test_loop_with_different_ip_prefixes() {
 static void test_loop() {
   const ip_addr_t a{0}, b{1}, c{2};
   analysis_t analysis{3};
-  analysis.insert_or_assign(ip_prefix_0_15, a, {b});
+  analysis.insert_or_assign(ip_prefix_0_15, a, {b}, 5);
   assert(analysis.ok());
-  analysis.insert_or_assign(ip_prefix_0_15, b, {c});
+  analysis.insert_or_assign(ip_prefix_0_15, b, {c}, 5);
   assert(analysis.ok());
-  analysis.insert_or_assign(ip_prefix_0_15, c, {a});
+  analysis.insert_or_assign(ip_prefix_0_15, c, {a}, 5);
   assert(not analysis.ok());
   assert(analysis.loops_per_flow().size() == 1);
   auto &flow_tree = analysis.flow_graph().flow_tree();
@@ -368,11 +436,25 @@ static void test_intersection_of_timestamps() {
 }
 
 void run_analysis_test() {
+  std::cout << "\tTest Reach Summary "<< std::endl;
   test_reach_summary();
+  std::cout << "\t..done" << std::endl
+	    << "\tTest History" << std::endl;
   test_history();
+  std::cout << "\t..done" << std::endl
+	    << "\tTest Simple Loop" << std::endl;
   test_loop();
+  std::cout << "\t..done" << std::endl
+	    << "\tTest Loop with Different IP Prefixes" << std::endl;
   test_loop_with_different_ip_prefixes();
+  std::cout << "\t..done" << std::endl
+	    << "\tTest Analysis" << std::endl;
   test_analysis();
+  std::cout << "\t..done" << std::endl
+	    << "\tTest Refresh" << std::endl;
   test_refresh();
+  std::cout << "\t..done" << std::endl
+	    << "\tTest Intersection of Timestamps" << std::endl;
   test_intersection_of_timestamps();
+  std::cout << "\t..done" << std::endl;
 }

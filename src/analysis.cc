@@ -8,6 +8,30 @@
 
 namespace nopticon {
 
+void history_t::print() const {
+  std::cout << "history : [";
+  auto tail_idx = index(m_head + 1);
+  bool start = false;
+  for (auto i = tail_idx; i != m_head ; i = index(i+1)) {
+    if (start)
+      std::cout << "START(";
+    else
+      std::cout << "STOP(";
+    std::cout << m_time_window.at(i) << "),";
+    start = not start;
+  }
+  std::cout << (start ? "START(" : "STOP(")
+	    << m_time_window.at(m_head) << ")]" << std::endl
+	    << "spans: [";
+  bool first{true};
+  for (auto s : m_slices) {
+    if (not first) std::cout << ",";
+    first = false;
+    std::cout << s.span();
+  }
+  std::cout << "]" << std::endl;
+}
+  
 void history_t::refresh(timestamp_t timestamp) noexcept {
   // If we're in 'stop', then set tail to new start;
   // otherwise, cause tail to catch up with head.
@@ -50,13 +74,18 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
     return;
   }
   // currently in 'start' but need to be in 'stop', or vice versa
-  if (newest >= current) {
-    // ignore simultaneous and out-of-order arrivals
+  if (newest > current) {
+    // ignore out-of-order arrivals
+    return;
+  } else if (newest == current and is_stop){
+    // ignore simlutaneous `STOP` requests
     return;
   }
+
+
   m_time_window.at(m_head = index(m_head + 1)) = current;
   if (is_stop) {
-    assert(m_head & 1);
+    assert(m_head & 1); // current head is a start idx, expecting a stop
     auto next_head = index(m_head + 1);
     for (auto &slice : m_slices) {
       auto &d = slice.duration;
@@ -65,10 +94,10 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
       d += current - newest;
       auto actual_span = slice.span();
       for (;;) {
-        assert(!(tail & 1));
+        assert(!(tail & 1)); // tail is a stop idx (even)
         auto oldest_start = oldest_start_time(slice);
         assert(oldest_start != 0);
-        assert(oldest_start <= newest);
+	assert(oldest_start <= newest);
         actual_span = current - oldest_start;
         if (tail == next_head) {
           next_head = m_time_window.size();
@@ -85,11 +114,28 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
         auto oldest_stop = m_time_window.at(index(tail + 1));
         assert(oldest_start <= oldest_stop);
         d -= oldest_stop - oldest_start;
-        if (tail + 1 == m_head) {
-          std::cerr << "Error: slice is too small\n";
-          std::exit(ERROR_SLICE_TOO_SMALL);
-        }
-        tail = index(tail + 2);
+        if (tail + 1 == m_head) { // theres only one interval in the current slice
+	  assert(oldest_start <= current - slice.span());
+	  // stop at span boundary
+	  m_time_window.at(m_head) = current - slice.span();
+
+	  //start at span boundary
+	  m_head = index(m_head + 1);
+	  tail = m_head;
+	  m_time_window.at(m_head) = current - slice.span();
+
+	  // close at current
+	  m_head = index(m_head + 1);
+	  m_time_window.at(m_head) = current;
+
+	  next_head = index(m_head+1);
+	  
+	  // [current-span, current] = [m_time_window[m_head-1], m_time_window[m_head]]
+	  d = slice.span();
+	  newest = current - slice.span();
+        } else {
+	  tail = index(tail + 2);
+	}
       }
       assert(actual_span <= slice.span());
     }
@@ -132,6 +178,7 @@ void history_t::reset() noexcept {
     slice.duration = 0;
     slice.tail = 0;
   }
+  m_time_window.at(m_head) = 0;
 }
 
 reach_summary_t::reach_summary_t(std::size_t number_of_nodes)

@@ -402,14 +402,35 @@ static void test_ip_prefix_tree() {
 }
 
 void run_ipv4_test() {
+  std::cout << "\tTesting IP Prefix Length"<< std::endl;
   test_ip_prefix_length();
+  std::cout << "\t..done" << std::endl
+	    << "\tTesting Validity" << std::endl;
   test_validity();
+  std::cout  << "\t..done" << std::endl
+	     << "\tTesting Overlapping and Subset Prefixes" <<std::endl;
   test_overlap_and_subset();
+  std::cout << "\t..done" << std::endl
+	    << "\tTesting IP Prefix map" << std::endl;
   test_ip_prefix_map();
+  std::cout << "\t..done" << std::endl
+	    << "\tTesting IP Prefix Tree with subset " << ip_prefix_2_3
+	    << " of "  << ip_prefix_0_15 << std::endl;
   test_ip_prefix_tree_with_subset(ip_prefix_2_3, ip_prefix_0_15);
+  std::cout << "\t..done" << std::endl
+	    << "\tTesting IP Prefix Tree with subset"
+	    << ip_prefix_197_dot_157_slash_19 << " of "
+	    << ip_prefix_197_dot_157_slash_18 << std::endl;
   test_ip_prefix_tree_with_subset(ip_prefix_197_dot_157_slash_19,
                                   ip_prefix_197_dot_157_slash_18);
+  std::cout << "\t..done" << std::endl
+	    << "\tTest IP Prefix Tree" << std::endl;
   test_ip_prefix_tree();
+  std::cout << "\t..done" << std::endl
+	    << "\tTest Empty IP Prefix Tree" << std::endl;
   test_empty_ip_prefix_tree();
+  std::cout << "\t..done" << std::endl
+	    << "\tTest Disjoint Ranges" << std::endl;
   test_disjoint_ranges();
+  std::cout << "\t..done" << std::endl;
 }

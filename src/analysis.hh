@@ -66,6 +66,9 @@ public:
 
   bool request_stop = false;
 
+  /// Print out the history
+  void print() const;
+  
   /// Mark the time at which a property starts to hold
   void start(timestamp_t);
 

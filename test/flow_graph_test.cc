@@ -215,8 +215,19 @@ static void test_flow_info() {
 }
 
 void run_flow_graph_test() {
+  std::cout << "\tTest Print IP prefix" << std::endl;
   test_print_ip_prefix();
+  std::cout << "\t..done" << std::endl
+	    << "\tTest Flow Info" << std::endl;
   test_flow_info();
+  std::cout << "\t..done" << std::endl
+	    << "\tTest Flow graph ("
+	    << ip_prefix_w << "," << ip_prefix_x << ","
+	    << ip_prefix_u << "," << ip_prefix_z << "1U" << ")" << std::endl;
   test_flow_graph({ip_prefix_w, ip_prefix_x, ip_prefix_y, ip_prefix_z}, 1U);
+  std::cout << "\t..done"  << std::endl
+	    << "\tTest Flow graph ("
+	    << ip_prefix_u << "," << ip_prefix_i << "," << ip_prefix_j << ")" << std::endl;
   test_flow_graph({ip_prefix_u, ip_prefix_i, ip_prefix_j}, 2U);
+  std::cout << "\t..done" << std::endl;
 }
