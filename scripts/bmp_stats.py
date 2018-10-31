@@ -52,18 +52,17 @@ def main():
             
             # Count peer events, if requested
             if settings.peerevents:
-                if (bmp_msg._type == bmp.MessageType.PEER_UP):
+                action = None
+                if (bmp_msg.isPeerUp()):
                     peer_up += 1
-                    if settings.verbose:
-                        source = (bmp_msg._src_id if bmp_msg._src_id not in rdns else rdns[bmp_msg._src_id])
-                        peer = (bmp_msg._peer if bmp_msg._peer not in rdns else rdns[bmp_msg._peer])
-                        print('Up: %s--%s' % (source, peer))
-                if (bmp_msg._type == bmp.MessageType.PEER_DOWN):
+                    action = 'Up'
+                if (bmp_msg.isPeerDown()):
                     peer_down += 1
-                    if settings.verbose:
-                        source = (bmp_msg._src_id if bmp_msg._src_id not in rdns else rdns[bmp_msg._src_id])
-                        peer = (bmp_msg._peer if bmp_msg._peer not in rdns else rdns[bmp_msg._peer])
-                        print('Down: %s--%s' % (source, peer))
+                    action = 'Down'
+                if settings.verbose and action is not None:
+                    assert bmp_msg._src_id in rdns, "%s not in rdns" % bmp_msg._src_id
+                    assert bmp_msg._peer in rdns, "%s not in rdns" % bmp_msg._peer
+                    print('%s: %s--%s' % (action, rdns[bmp_msg._src_id], rdns[bmp_msg._peer]))
 
     if settings.duration:
         duration = last_timestamp - first_timestamp
