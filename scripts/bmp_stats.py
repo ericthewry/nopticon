@@ -62,7 +62,8 @@ def main():
                     peer_down += 1
                     if settings.verbose:
                         source = (bmp_msg._src_id if bmp_msg._src_id not in rdns else rdns[bmp_msg._src_id])
-                        print('Down: %s--?' % (source))
+                        peer = (bmp_msg._peer if bmp_msg._peer not in rdns else rdns[bmp_msg._peer])
+                        print('Down: %s--%s' % (source, peer))
 
     if settings.duration:
         duration = last_timestamp - first_timestamp

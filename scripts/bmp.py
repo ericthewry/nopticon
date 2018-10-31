@@ -50,6 +50,10 @@ class PeerDownMessage(Message):
     def __init__(self, msg_dict):
         assert MessageType(msg_dict['Header']['Type']) == MessageType.PEER_DOWN
         super().__init__(MessageType.PEER_DOWN, msg_dict)
+        if 'LocalAddress' in msg_dict['Body']:
+            self._peer = ipaddress.ip_address(msg_dict['Body']['LocalAddress'])
+        else:
+            self._peer = None
 
 class PeerUpMessage(Message):
     def __init__(self, msg_dict):
