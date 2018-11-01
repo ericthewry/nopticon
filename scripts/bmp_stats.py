@@ -44,10 +44,16 @@ def main():
             bmp_msg = bmp.parse_message(bmp_json.strip())
 
             # Get first and last timestamps, if required
-            if settings.duration:
-                if bmp_msg._timestamp != 0:
-                    if first_timestamp == 0:
-                        first_timestamp = bmp_msg._timestamp
+            if settings.duration and bmp_msg._timestamp != 0:
+                # Update first timestamp
+                if first_timestamp == 0:
+                    first_timestamp = bmp_msg._timestamp
+                # Check for reordering beyond 1 millisecond
+                if (settings.verbose and
+                    round(bmp_msg._timestamp,3) < round(last_timestamp,3)):
+                    print('Warning: message with timestamp %f after message with timestamp %f' % (bmp_msg._timestamp, last_timestamp))
+                # Update last timestamp
+                if (bmp_msg._timestamp > last_timestamp):
                     last_timestamp = bmp_msg._timestamp
             
             # Count peer events, if requested
@@ -66,7 +72,7 @@ def main():
 
     if settings.duration:
         duration = last_timestamp - first_timestamp
-        print('Duration: %d seconds' % (math.ceil(duration)))
+        print('Duration: %f seconds' % (duration))
     if settings.peerevents:
         print('Peer Up events: %d' % (peer_up))
         print('Peer Down events: %d' % (peer_down))
