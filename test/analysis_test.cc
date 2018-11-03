@@ -279,6 +279,10 @@ static void test_intersection_of_timestamps() {
   assert(intersect(u, w) == timestamps_t({5, 8, 9, 12}));
   const timestamps_t p{{1, 3, 5, 7, 8, 9}}, q{{2, 4, 6, 7}};
   assert(intersect(p, q) == timestamps_t({2, 3, 6, 7}));
+  const timestamps_t i{{10, 17, 29, 35, 42, 53, 58, 70, 70, 81, 90, 99}};
+  const timestamps_t j{{12, 44, 54, 70, 80, 99}};
+  assert(intersect(i, j) == timestamps_t({12, 17, 29, 35, 42, 44, 58, 70, 80, 81, 90, 99}));
+  assert(intersect(j, i) == intersect(i, j));
   for (auto a : {x, y, z, u, v, w, p, q}) {
     for (auto b : {x, y, z, u, v, w, p, q}) {
       assert(intersect(a, b) == intersect(b, a));

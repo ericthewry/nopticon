@@ -406,6 +406,7 @@ timestamps_t intersect(const timestamps_t &a, const timestamps_t &b) {
   constexpr bool A = 0, B = 1;
   timestamps_t::size_type more_array[] = {a.size(), b.size()};
   timestamps_t::const_iterator iter_array[] = {a.cbegin(), b.cbegin()};
+  timestamps_t::const_iterator end_array[] = {a.cend(), b.cend()};
   timestamp_t low[] = {-1ULL, -1ULL}, high[] = {0ULL, 0ULL};
 
   auto advance = [&](bool index) {
@@ -423,9 +424,17 @@ timestamps_t intersect(const timestamps_t &a, const timestamps_t &b) {
   };
   auto process_both_intervals = [&]() {
     if (low[A] <= high[B] and low[B] <= high[A]) {
-      c.push_back(std::max(low[A], low[B]));
-      c.push_back(std::min(high[A], high[B]));
+      auto _low = std::max(low[A], low[B]);
+      auto _high = std::min(high[A], high[B]);
+      if (not c.empty() and c.back() == _low) {
+        c.back() = _high;
+      } else {
+        c.push_back(_low);
+        c.push_back(_high);
+      }
+      return false;
     }
+    return true;
   };
   while (more_array[A] and more_array[B]) {
     if (high[A] < high[B]) {
@@ -435,10 +444,28 @@ timestamps_t intersect(const timestamps_t &a, const timestamps_t &b) {
     }
     process_both_intervals();
   }
-  const auto X = !more_array[A];
-  while (more_array[X]) {
-    advance(X);
-    process_both_intervals();
+  bool X = more_array[B], Y = !X;
+  assert(more_array[Y] == 0);
+  if (more_array[X]) {
+    auto x_end = end_array[X];
+    auto x_iter = std::lower_bound(iter_array[X], x_end, low[Y]);
+    if (x_iter == x_end) {
+      return c;
+    }
+    auto x_distance = std::distance(iter_array[X], x_iter);
+    if (x_distance & 1) {
+      --x_iter;
+      --x_distance;
+    }
+    iter_array[X] = x_iter;
+    more_array[X] -= x_distance;
+    assert(2 <= more_array[X]);
+    do {
+      advance(X);
+      if (process_both_intervals()) {
+        break;
+      }
+    } while (more_array[X]);
   }
   return c;
 }
