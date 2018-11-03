@@ -435,11 +435,10 @@ timestamps_t intersect(const timestamps_t &a, const timestamps_t &b) {
     }
     process_both_intervals();
   }
-  for (auto select : {A, B}) {
-    while (more_array[select]) {
-      advance(select);
-      process_both_intervals();
-    }
+  const auto X = !more_array[A];
+  while (more_array[X]) {
+    advance(X);
+    process_both_intervals();
   }
   return c;
 }
