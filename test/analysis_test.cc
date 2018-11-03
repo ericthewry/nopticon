@@ -273,17 +273,20 @@ static void test_refresh() {
 static void test_intersection_of_timestamps() {
   const timestamps_t x{{3, 7}}, y{{5, 9}}, z{{4, 6}};
   assert(intersect(x, y) == timestamps_t({5, 7}));
-  assert(intersect(y, x) == timestamps_t({5, 7}));
   assert(intersect(y, z) == timestamps_t({5, 6}));
-  assert(intersect(z, y) == timestamps_t({5, 6}));
   const timestamps_t u{{1, 3, 5, 8, 9, 15}}, v{{1, 5}}, w{{5, 12}};
   assert(intersect(u, v) == timestamps_t({1, 3, 5, 5}));
-  assert(intersect(v, u) == timestamps_t({1, 3, 5, 5}));
   assert(intersect(u, w) == timestamps_t({5, 8, 9, 12}));
-  assert(intersect(w, u) == timestamps_t({5, 8, 9, 12}));
   const timestamps_t p{{1, 3, 5, 7, 8, 9}}, q{{2, 4, 6, 7}};
   assert(intersect(p, q) == timestamps_t({2, 3, 6, 7}));
-  assert(intersect(q, p) == timestamps_t({2, 3, 6, 7}));
+  for (auto a : {x, y, z, u, v, w, p, q}) {
+    for (auto b : {x, y, z, u, v, w, p, q}) {
+      assert(intersect(a, b) == intersect(b, a));
+      for (auto c : {x, y, z, u, v, w, p, q}) {
+        assert(intersect(c, intersect(a, b)) == intersect(intersect(c, a), b));
+      }
+    }
+  }
 }
 
 void run_analysis_test() {
