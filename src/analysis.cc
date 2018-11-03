@@ -407,13 +407,30 @@ timestamps_t intersect(const timestamps_t &a, const timestamps_t &b) {
   timestamps_t::size_type more_array[] = {a.size(), b.size()};
   timestamps_t::const_iterator iter_array[] = {a.cbegin(), b.cbegin()};
   timestamps_t::const_iterator end_array[] = {a.cend(), b.cend()};
-  timestamp_t low[] = {-1ULL, -1ULL}, high[] = {0ULL, 0ULL};
+  timestamp_t low[] = {a[0], b[0]}, high[] = {0, 0};
 
-  auto advance = [&](bool index) {
-    auto& _iter = iter_array[index];
-    auto& _more = more_array[index];
-    auto& _low = low[index];
-    auto& _high = high[index];
+  auto fast_forward = [&](bool X) {
+    const auto Y = !X;
+    auto x_end = end_array[X];
+    auto x_iter = std::lower_bound(iter_array[X], x_end, low[Y]);
+    if (x_iter == x_end) {
+      return true;
+    }
+    auto x_distance = std::distance(iter_array[X], x_iter);
+    if (x_distance & 1) {
+      --x_iter;
+      --x_distance;
+    }
+    iter_array[X] = x_iter;
+    more_array[X] -= x_distance;
+    assert(2 <= more_array[X]);
+    return false;
+  };
+  auto advance = [&](bool X) {
+    auto& _iter = iter_array[X];
+    auto& _more = more_array[X];
+    auto& _low = low[X];
+    auto& _high = high[X];
     assert(2 <= _more);
     _more -= 2;
     _low = *(_iter++);
@@ -438,8 +455,14 @@ timestamps_t intersect(const timestamps_t &a, const timestamps_t &b) {
   };
   while (more_array[A] and more_array[B]) {
     if (high[A] < high[B]) {
+      if (fast_forward(A)) {
+        return c;
+      }
       advance(A);
     } else {
+      if (fast_forward(B)) {
+        return c;
+      }
       advance(B);
     }
     process_both_intervals();
@@ -447,19 +470,7 @@ timestamps_t intersect(const timestamps_t &a, const timestamps_t &b) {
   bool X = more_array[B], Y = !X;
   assert(more_array[Y] == 0);
   if (more_array[X]) {
-    auto x_end = end_array[X];
-    auto x_iter = std::lower_bound(iter_array[X], x_end, low[Y]);
-    if (x_iter == x_end) {
-      return c;
-    }
-    auto x_distance = std::distance(iter_array[X], x_iter);
-    if (x_distance & 1) {
-      --x_iter;
-      --x_distance;
-    }
-    iter_array[X] = x_iter;
-    more_array[X] -= x_distance;
-    assert(2 <= more_array[X]);
+    fast_forward(X);
     do {
       advance(X);
       if (process_both_intervals()) {

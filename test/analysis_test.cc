@@ -6,6 +6,8 @@
 
 #include <analysis.hh>
 
+#include <random>
+
 using namespace nopticon;
 
 static void check_duration(const slices_t &slices, duration_t d) {
@@ -270,6 +272,63 @@ static void test_refresh() {
   }
 }
 
+static timestamps_t simple_intersect(const timestamps_t &a, const timestamps_t &b) {
+  if (a.empty() or b.empty()) {
+    return {};
+  }
+  assert(std::is_sorted(a.begin(), a.end()));
+  assert(std::is_sorted(b.begin(), b.end()));
+  assert(!(a.size() & 1));
+  assert(!(b.size() & 1));
+  timestamps_t c;
+  c.reserve(std::max(a.size(), b.size()));
+
+  constexpr bool A = 0, B = 1;
+  timestamps_t::size_type more_array[] = {a.size(), b.size()};
+  timestamps_t::const_iterator iter_array[] = {a.cbegin(), b.cbegin()};
+  timestamp_t low[] = {-1ULL, -1ULL}, high[] = {0ULL, 0ULL};
+
+  auto advance = [&](bool index) {
+    auto& _iter = iter_array[index];
+    auto& _more = more_array[index];
+    auto& _low = low[index];
+    auto& _high = high[index];
+    assert(2 <= _more);
+    _more -= 2;
+    _low = *(_iter++);
+    _high = *(_iter++);
+    assert(_low != 0);
+    assert(_high != 0);
+    assert(_low <= _high);
+  };
+  auto process_both_intervals = [&]() {
+    if (low[A] <= high[B] and low[B] <= high[A]) {
+      auto _low = std::max(low[A], low[B]);
+      auto _high = std::min(high[A], high[B]);
+      if (not c.empty() and c.back() == _low) {
+        c.back() = _high;
+      } else {
+        c.push_back(_low);
+        c.push_back(_high);
+      }
+    }
+  };
+  while (more_array[A] and more_array[B]) {
+    if (high[A] < high[B]) {
+      advance(A);
+    } else {
+      advance(B);
+    }
+    process_both_intervals();
+  }
+  const auto X = !more_array[A];
+  while (more_array[X]) {
+    advance(X);
+    process_both_intervals();
+  }
+  return c;
+}
+
 static void test_intersection_of_timestamps() {
   const timestamps_t x{{3, 7}}, y{{5, 9}}, z{{4, 6}};
   assert(intersect(x, y) == timestamps_t({5, 7}));
@@ -290,6 +349,21 @@ static void test_intersection_of_timestamps() {
         assert(intersect(c, intersect(a, b)) == intersect(intersect(c, a), b));
       }
     }
+  }
+  for (unsigned repeat = 0; repeat < 4096; ++repeat) {
+    std::random_device rd;
+    std::mt19937 gen{rd()};
+    std::uniform_int_distribution<unsigned> dis{1, 65536};
+    timestamps_t g, h;
+    g.reserve(4096);
+    h.reserve(4096);
+    for (std::size_t k = 0; k < 4096; ++k) {
+      g.push_back(dis(gen));
+      h.push_back(dis(gen));
+    }
+    std::sort(g.begin(), g.end());
+    std::sort(h.begin(), h.end());
+    assert(intersect(g, h) == simple_intersect(g, h));
   }
 }
 
