@@ -193,7 +193,6 @@ void log_t::print_reach_summary(
           continue;
         }
       }
-      
       bool non_zero_rank = false;
       for (auto rank : ranks) {
         if (rank != 0.0f) {

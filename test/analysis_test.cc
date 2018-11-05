@@ -13,11 +13,11 @@ using namespace nopticon;
 
 static void check_duration(const slices_t &slices, duration_t d) {
   assert(slices.size() == 1);
-  if (slices.front().duration != d){
-    std::cout << "Got duration " << slices.front().duration << "," << std::endl
+  if (slices.front().get_duration() != d){
+    std::cout << "Got duration " << slices.front().get_duration() << "," << std::endl
 	      << "but expected " << d << std::endl;
   }
-  assert(slices.front().duration == d);
+  assert(slices.front().get_duration() == d);
 }
 
 static void check_rank(const reach_summary_t &reach_summary,
@@ -264,17 +264,17 @@ static void test_analysis() {
   auto &reach_summary = analysis.reach_summary();
   auto &history_3_5 = reach_summary.history(1, 3, 5);
   assert(history_3_5.slices().size() == 1);
-  assert(history_3_5.slices().front().duration == 18);
+  assert(history_3_5.slices().front().get_duration() == 18);
   check_rank(reach_summary, history_3_5, 1.0);
 
   auto &history_4_5 = reach_summary.history(1, 4, 5);
   assert(history_4_5.slices().size() == 1);
-  assert(history_4_5.slices().front().duration == 5);
+  assert(history_4_5.slices().front().get_duration() == 5);
   check_rank(reach_summary, history_4_5, 5 / static_cast<float>(19 - 1));
 
   auto &history_4_7 = reach_summary.history(1, 4, 7);
   assert(history_4_7.slices().size() == 1);
-  assert(history_4_7.slices().front().duration == 0);
+  assert(history_4_7.slices().front().get_duration() == 0);
   check_rank(reach_summary, history_4_7,
              (19 - 7) / static_cast<float>(19 - 1));
 }
@@ -436,25 +436,11 @@ static void test_intersection_of_timestamps() {
 }
 
 void run_analysis_test() {
-  std::cout << "\tTest Reach Summary "<< std::endl;
   test_reach_summary();
-  std::cout << "\t..done" << std::endl
-	    << "\tTest History" << std::endl;
   test_history();
-  std::cout << "\t..done" << std::endl
-	    << "\tTest Simple Loop" << std::endl;
   test_loop();
-  std::cout << "\t..done" << std::endl
-	    << "\tTest Loop with Different IP Prefixes" << std::endl;
   test_loop_with_different_ip_prefixes();
-  std::cout << "\t..done" << std::endl
-	    << "\tTest Analysis" << std::endl;
   test_analysis();
-  std::cout << "\t..done" << std::endl
-	    << "\tTest Refresh" << std::endl;
   test_refresh();
-  std::cout << "\t..done" << std::endl
-	    << "\tTest Intersection of Timestamps" << std::endl;
   test_intersection_of_timestamps();
-  std::cout << "\t..done" << std::endl;
 }

@@ -38,7 +38,7 @@ void history_t::refresh(timestamp_t timestamp) noexcept {
   bool is_stop = m_head & 1;
   auto h = is_stop ? index(m_head + 1) : m_head;
   for (auto& slice : m_slices) {
-    slice.duration = 0;
+    slice.set_duration(0);
     slice.tail = h;
     assert(!(h & 1));
   }
@@ -50,7 +50,7 @@ void history_t::refresh(timestamp_t timestamp) noexcept {
 rank_t history_t::rank(const slice_t &slice, timestamp_t global_start,
                        timestamp_t global_stop) const noexcept {
   constexpr double boost = 0.00001;
-  auto duration = static_cast<double>(slice.duration);
+  auto duration = static_cast<double>(slice.get_duration());
   assert(global_start <= global_stop);
   // Timestamps of non-empty histories are non-decreasing.
   assert(duration == 0 or oldest_start_time(slice) <= newest_time());
@@ -78,23 +78,21 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
     // ignore out-of-order arrivals
     return;
   } else if (newest == current and is_stop){
-    // ignore simlutaneous `STOP` requests
+    // ignore simtulaneous `STOP` requests
     return;
   }
-
-
   m_time_window.at(m_head = index(m_head + 1)) = current;
   if (is_stop) {
     assert(m_head & 1); // current head is a start idx, expecting a stop
     auto next_head = index(m_head + 1);
     for (auto &slice : m_slices) {
-      auto &d = slice.duration;
+      duration_t d = slice.get_duration();
       auto &tail = slice.tail;
       assert(!(tail & 1));
       d += current - newest;
       auto actual_span = slice.span();
       for (;;) {
-        assert(!(tail & 1)); // tail is a stop idx (even)
+        assert(!(tail & 1)); // tail is a STOP idx (even)
         auto oldest_start = oldest_start_time(slice);
         assert(oldest_start != 0);
 	assert(oldest_start <= newest);
@@ -113,7 +111,7 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
         }
         auto oldest_stop = m_time_window.at(index(tail + 1));
         assert(oldest_start <= oldest_stop);
-        d -= oldest_stop - oldest_start;
+	d -= oldest_stop - oldest_start;
         if (tail + 1 == m_head) { // theres only one interval in the current slice
 	  assert(oldest_start <= current - slice.span());
 	  // stop at span boundary
@@ -137,6 +135,7 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
 	  tail = index(tail + 2);
 	}
       }
+      slice.set_duration(d);
       assert(actual_span <= slice.span());
     }
   }
@@ -149,7 +148,7 @@ timestamps_t history_t::timestamps(timestamp_t global_end) const noexcept {
   duration_t duration = 0;
   auto tail = m_time_window.size();
   for (auto& slice : m_slices) {
-    if (slice.duration >= duration) {
+    if (slice.get_duration() >= duration) {
       tail = slice.tail;
     }
   }
@@ -175,7 +174,7 @@ timestamps_t history_t::timestamps(timestamp_t global_end) const noexcept {
 void history_t::reset() noexcept {
   m_head = m_time_window.size() - 1;
   for (auto &slice : m_slices) {
-    slice.duration = 0;
+    slice.set_duration(0);
     slice.tail = 0;
   }
   m_time_window.at(m_head) = 0;

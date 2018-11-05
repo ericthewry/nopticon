@@ -4,6 +4,7 @@
 #pragma once
 
 #include "flow_graph.hh"
+#include <iostream>
 
 namespace nopticon {
 
@@ -23,20 +24,32 @@ class slice_t {
 public:
   slice_t(duration_t span) : m_span{span} {}
 
-  /// total slice-time in which a property held
-  duration_t duration = 0;
+  /// accessors for the private duration field
+  const duration_t get_duration() const noexcept { return m_duration; };
+  void set_duration(duration_t d) {
+#ifdef DEBUG
+    if (d > m_span) {
+      std::cerr << "Tried to set duration to " << d << std::endl
+		<< "    but the span is only " << m_span << std::endl;
+    }
+#endif
+    assert(d <= m_span);
+    m_duration = d;
+  }
 
   /// total permittable time duration of the slice
   duration_t span() const noexcept { return m_span; }
+
+  // end of slice, always an even number
+  std::size_t tail = 0;
 
 private:
   // non-const only to allow for history vector resizing
   duration_t m_span;
 
-  friend class history_t;
+  /// total slice-time in which a property held
+  duration_t m_duration = 0;
 
-  // end of slice, always an even number
-  std::size_t tail = 0;
 };
 
 typedef std::vector<slice_t> slices_t;
