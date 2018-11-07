@@ -25,17 +25,17 @@ void history_t::refresh(timestamp_t timestamp) noexcept {
 
 rank_t history_t::rank(const slice_t &slice, timestamp_t global_start,
                        timestamp_t global_stop) const noexcept {
-  constexpr float zero_div_guard = 0.00001;
-  auto duration = slice.duration;
-  assert(global_start <= global_start);
+  constexpr double boost = 0.00001;
+  auto duration = static_cast<double>(slice.duration);
+  assert(global_start <= global_stop);
   // Timestamps of non-empty histories are non-decreasing.
   assert(duration == 0 or oldest_start_time(slice) <= newest_time());
   if (!(m_head & 1) and newest_time() <= global_stop) {
     // We're in 'start' and need to add a missing 'stop'.
-    duration += global_stop - newest_time();
+    duration += global_stop - newest_time() + boost;
   }
   auto span = std::min(slice.span(), global_stop - global_start);
-  return duration / (span + zero_div_guard);
+  return duration / (static_cast<double>(span) + boost);
 }
 
 void history_t::update_duration(bool is_stop, timestamp_t current) {
@@ -154,9 +154,13 @@ void reach_summary_t::reset() noexcept {
 }
 
 void reach_summary_t::refresh(timestamp_t timestamp) noexcept {
+  if (global_start < timestamp) {
+    global_start = timestamp;
+  }
   if (global_stop < timestamp) {
     global_stop = timestamp;
   }
+  assert(global_start <= global_stop);
   for (auto &history_vec : m_tensor) {
     for (auto &history : history_vec) {
       history.refresh(timestamp);
