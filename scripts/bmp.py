@@ -55,8 +55,14 @@ class PeerDownMessage(Message):
         else:
             self._peer = None
 
+    def edge(self):
+        return (self._src_id, self._peer)
+
 class PeerUpMessage(Message):
     def __init__(self, msg_dict):
         assert MessageType(msg_dict['Header']['Type']) == MessageType.PEER_UP
         super().__init__(MessageType.PEER_UP, msg_dict)
         self._peer = ipaddress.ip_address(msg_dict['Body']['LocalAddress'])
+
+    def edge(self):
+        return (self._src_id, self._peer)
