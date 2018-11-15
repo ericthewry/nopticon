@@ -68,7 +68,7 @@ def main():
                 if settings.verbose and action is not None:
                     assert bmp_msg._src_id in rdns, "%s not in rdns" % bmp_msg._src_id
                     assert bmp_msg._peer in rdns, "%s not in rdns" % bmp_msg._peer
-                    print('%s: %s--%s' % (action, rdns[bmp_msg._src_id], rdns[bmp_msg._peer]))
+                    print('%s: %s--%s %f' % (action, rdns[bmp_msg._src_id], rdns[bmp_msg._peer], bmp_msg._timestamp))
 
     if settings.duration:
         duration = last_timestamp - first_timestamp
