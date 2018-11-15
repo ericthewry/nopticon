@@ -25,6 +25,14 @@ class ReachSummary:
             return {}
         return self._edges[flow]
 
+    def get_edge_rank(self, flow, edge):
+        if edge not in self.get_edges(flow):
+            return None
+        return self.get_edges(flow)[edge]['rank-0']
+
+    def get_flows(self):
+        return self._edges.keys()
+
 class CommandType(Enum):
     PRINT_LOG = 0
     RESET_NETWORK_SUMMARY = 1
