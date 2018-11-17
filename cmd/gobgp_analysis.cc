@@ -491,8 +491,6 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
     if (peer_header["Timestamp"].IsUint64()) {
       // Convert time in seconds and to time in milliseconds
       timestamp = peer_header["Timestamp"].GetUint64() * MILLISECONDS_PER_SECOND;
-    if (peer_header["Timestamp"].IsUint()) {
-      timestamp = peer_header["Timestamp"].GetUint() * 1000;
     } else {
       // Convert time in seconds and nanoseconds to time in milliseconds
       assert(peer_header["Timestamp"].IsDouble());
