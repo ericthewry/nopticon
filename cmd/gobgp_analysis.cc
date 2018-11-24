@@ -298,6 +298,7 @@ void log_t::print_path_preferences(
     writer.EndArray();
     writer.Key("rank");
     writer.Double(record.rank);
+    writer.EndObject();
   }
   writer.EndArray();
 }
