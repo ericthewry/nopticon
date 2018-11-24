@@ -34,8 +34,15 @@ rank_t history_t::rank(const slice_t &slice, timestamp_t global_start,
     // We're in 'start' and need to add a missing 'stop'.
     duration += global_stop - newest_time() + boost;
   }
-  auto span = std::min(slice.span(), global_stop - global_start);
-  return duration / (static_cast<double>(span) + boost);
+  // The duration of a slice exceeds its span in two scenarios:
+  // 1. Slice is open and we close it with a large global_stop time;
+  // 2. Slice has only one start/stop pair whose difference is larger
+  //    than the span of the slice
+  // In both casese, we ensure that the rank of the slice is 1.
+  assert(duration <= global_stop - global_start);
+  double span = duration > slice.span() ? duration :
+    std::min(slice.span(), global_stop - global_start);
+  return duration / (span + boost);
 }
 
 void history_t::update_duration(bool is_stop, timestamp_t current) {
@@ -78,20 +85,15 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
           // unprovable, but something we'd like
           assert(m_time_window.size() <= (1 << 10));
         }
-
-        if (actual_span <= slice.span()) {
+        if (actual_span <= slice.span() or tail + 1 == m_head) {
           break;
         }
         auto oldest_stop = m_time_window.at(index(tail + 1));
         assert(oldest_start <= oldest_stop);
-        d -= oldest_stop - oldest_start;
-        if (tail + 1 == m_head) {
-          std::cerr << "Error: slice is too small\n";
-          std::exit(ERROR_SLICE_TOO_SMALL);
-        }
         tail = index(tail + 2);
+        d -= oldest_stop - oldest_start;
       }
-      assert(actual_span <= slice.span());
+      assert(tail + 1 == m_head or actual_span <= slice.span());
     }
   }
 }

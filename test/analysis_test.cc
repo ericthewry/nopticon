@@ -195,20 +195,33 @@ static void test_analysis() {
   analysis.erase(ip_prefix, 3, 19);
   auto &reach_summary = analysis.reach_summary();
   auto &history_3_5 = reach_summary.history(1, 3, 5);
-  assert(history_3_5.slices().size() == 1);
-  assert(history_3_5.slices().front().duration == 18);
+  check_duration(history_3_5.slices(), 18);
   check_rank(reach_summary, history_3_5, 1.0);
 
   auto &history_4_5 = reach_summary.history(1, 4, 5);
-  assert(history_4_5.slices().size() == 1);
-  assert(history_4_5.slices().front().duration == 5);
+  check_duration(history_4_5.slices(), 5);
   check_rank(reach_summary, history_4_5, 5 / static_cast<float>(19 - 1));
 
   auto &history_4_7 = reach_summary.history(1, 4, 7);
-  assert(history_4_7.slices().size() == 1);
-  assert(history_4_7.slices().front().duration == 0);
+  check_duration(history_4_7.slices(), 0);
   check_rank(reach_summary, history_4_7,
              (19 - 7) / static_cast<float>(19 - 1));
+
+  auto &history_2_3 = reach_summary.history(1, 2, 3);
+  analysis.insert_or_assign(ip_prefix, 2, {3}, 13);
+  analysis.erase(ip_prefix, 2, 81);
+  check_duration(history_2_3.slices(), 68);
+  check_rank(reach_summary, history_2_3, 1.0);
+
+  analysis.insert_or_assign(ip_prefix, 2, {3}, 100);
+  analysis.erase(ip_prefix, 2, 153);
+  check_duration(history_2_3.slices(), 53);
+  check_rank(reach_summary, history_2_3, 1.0);
+
+  analysis.insert_or_assign(ip_prefix, 2, {3}, 170);
+  analysis.erase(ip_prefix, 2, 184);
+  check_duration(history_2_3.slices(), 14);
+  check_rank(reach_summary, history_2_3, 14 / 18.0);
 }
 
 static void test_refresh() {
@@ -367,7 +380,68 @@ static void test_intersection_of_timestamps() {
   }
 }
 
+static void test_slice_too_small() {
+  spans_t spans;
+  spans.push_back(20);
+  history_t history{spans, 3};
+
+  //[1,50]
+  history.start(1);
+  history.stop(50);
+  check_duration(history.slices(), 49);
+
+  history.reset();
+
+  //[1,21]
+  history.start(1);
+  history.stop(21);
+  check_duration(history.slices(),20);
+
+  history.reset();
+
+  // [1541089737329,1541089738324,1541089783864,1541089783886]
+  history.start(1541089737329);
+  history.stop(1541089738324);
+  check_duration(history.slices(), 995);
+
+  history.start(1541089783864);
+  history.stop(1541089783886);
+  check_duration(history.slices(), 22);
+
+  history.reset();
+
+  //[1,5,6,21]
+  history.start(1);
+  history.stop(5);
+  history.start(6);
+  history.stop(21);
+  check_duration(history.slices(),19);
+
+  history.reset();
+
+  //[1,5,6,25,26,30]
+  history.start(1);  // [1]
+  history.stop(5);   // [1,5]
+  history.start(6);  // [1,5,6]
+  history.stop(25);  // [1,5,6,25]
+  history.start(26); // [26,5,6,25]
+  history.stop(30);  // [26,30,6,25]
+  check_duration(history.slices(), 4);
+
+  history.reset();
+
+  // [1,5,6,15,20,45]
+  history.start(1);
+  history.stop(5);
+  history.start(6);
+  history.stop(15);
+  history.start(20);
+  history.stop(45);
+  check_duration(history.slices(), 25);
+}
+
 void run_analysis_test() {
+  test_slice_too_small();
   test_reach_summary();
   test_history();
   test_loop();
