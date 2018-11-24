@@ -39,7 +39,7 @@ rank_t history_t::rank(const slice_t &slice, timestamp_t global_start,
   // 2. Slice has only one start/stop pair whose difference is larger
   //    than the span of the slice
   // In both casese, we ensure that the rank of the slice is 1.
-  assert(duration <= global_stop - global_start);
+  assert(duration <= (global_stop - global_start) + boost);
   double span = duration > slice.span() ? duration :
     std::min(slice.span(), global_stop - global_start);
   return duration / (span + boost);
