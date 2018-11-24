@@ -228,6 +228,97 @@ history_t &reach_summary_t::history(flow_id_t flow_id, nid_t s, nid_t t) {
   return hv[index];
 }
 
+void path_preference_summary_t::link_up(nid_t s, nid_t t, timestamp_t timestamp) {
+  m_link_history_vec.at(make_index(s, t)).start(timestamp);
+}
+
+void path_preference_summary_t::link_down(nid_t s, nid_t t, timestamp_t timestamp) {
+  m_link_history_vec.at(make_index(s, t)).stop(timestamp);
+}
+
+path_timestamps_t path_preference_summary_t::get_path_timestamps() const {
+  auto link_timestamps = [&](nid_t s, nid_t t) {
+    return m_link_history_vec.at(make_index(s, t)).timestamps(global_stop);
+  };
+  path_timestamps_t result;
+  for (auto& path_history : m_route_history) {
+    for (auto& kv : path_history) {
+      auto& path = kv.first;
+      assert(1 < path.size());
+      if (result.find(path) != result.end()) {
+        continue;
+      }
+      auto timestamps = link_timestamps(path[0], path[1]);
+      for (std::size_t i = 1; not timestamps.empty() and i + 1 < path.size(); ++i) {
+         auto next_timestamps = link_timestamps(path[i], path[i + 1]);
+         timestamps = intersect(timestamps, next_timestamps);
+      }
+      if (not timestamps.empty()) {
+        result[path] = timestamps;
+      }
+    }
+  }
+  return result;
+}
+
+route_timestamps_t path_preference_summary_t::get_route_timestamps() const {
+  route_timestamps_t result;
+  result.resize(m_route_history.size());
+  flow_id_t flow_id = 0;
+  for (auto& path_history : m_route_history) {
+    auto& path_timestamps = result[flow_id++];
+    for (auto& kv : path_history) {
+      auto& path = kv.first;
+      auto& history = kv.second;
+      auto result = path_timestamps.emplace(path, history.timestamps(global_stop));
+      assert(result.second);
+      assert(1 < path.size());
+    }
+  }
+  return result;
+}
+
+path_preferences_t path_preference_summary_t::path_preferences() const {
+  constexpr double zero_div_guard = 0.00001;
+  path_preferences_t path_preferences;
+  path_timestamps_t y_path_timestamps = get_path_timestamps();
+  route_timestamps_t route_timestamps = get_route_timestamps();
+  flow_id_t flow_id = 0;
+  for (auto& x_path_timestamps : route_timestamps) {
+    for (auto& x_kv : x_path_timestamps) {
+      auto& x_path = x_kv.first;
+      auto& x_timestamps = x_kv.second;
+      assert(1 < x_path.size());
+      assert(!(x_timestamps.size() & 1));
+      for (auto& y_kv : y_path_timestamps) {
+        auto& y_path = y_kv.first;
+        auto& y_timestamps = y_kv.second;
+        assert(1 < y_path.size());
+        assert(!(y_timestamps.size() & 1));
+        if (x_path.front() != y_path.front()
+            or x_path.back() != y_path.back()
+            or x_path == y_path) {
+          continue;
+        }
+        auto z_timestamps = intersect(x_timestamps, y_timestamps);
+        if (z_timestamps.empty()) {
+          continue;
+        }
+        duration_t z_duration = 0;
+        for (std::size_t i = 0; i + 1 < z_timestamps.size(); i += 2) {
+          assert(z_timestamps[i] <= z_timestamps[i + 1]);
+          z_duration += z_timestamps[i + 1] - z_timestamps[i];
+        }
+        auto z_span = z_timestamps.back() - z_timestamps.front();
+        auto z_rank = z_duration / (z_span + zero_div_guard);
+        path_preferences.emplace_back(flow_id, x_path, y_path, z_rank);
+      }
+    }
+    ++flow_id;
+  }
+  return path_preferences;
+}
+
 void find_loops(source_t start, const affected_flows_t &affected_flows,
                 loops_per_flow_t &loops_per_flow) {
   ip_addr_vec_t stack, path;
@@ -298,6 +389,14 @@ bool check_loop(const_flow_t flow, const loop_t &loop) {
   return is_connected(rule_ref_per_source, loop.back(), loop.front());
 }
 
+void analysis_t::link_up(nid_t s, nid_t t, timestamp_t timestamp) {
+  m_path_preference_summary.link_up(s, t, timestamp);
+}
+
+void analysis_t::link_down(nid_t s, nid_t t, timestamp_t timestamp) {
+  m_path_preference_summary.link_down(s, t, timestamp);
+}
+
 void analysis_t::clean_up() {
   for (auto flow : m_affected_flows) {
     auto loops_per_flow_iter = m_loops_per_flow.find(flow);
@@ -319,6 +418,11 @@ void analysis_t::clean_up() {
 }
 
 void analysis_t::update_reach_summary(timestamp_t timestamp) {
+  if (m_reach_summary.spans.empty()) {
+    return;
+  }
+
+  path_t path;
   ip_addr_vec_t stack;
   std::bitset<MAX_NUMBER_OF_NODES> bitset;
   stack.reserve(m_reach_summary.number_of_nodes);
@@ -329,24 +433,44 @@ void analysis_t::update_reach_summary(timestamp_t timestamp) {
   if (m_reach_summary.global_stop < timestamp) {
     m_reach_summary.global_stop = timestamp;
   }
+  if (m_path_preference_summary.global_stop < timestamp) {
+    m_path_preference_summary.global_stop = timestamp;
+  }
 
+  auto prepare_history_update = [timestamp](history_t& history) {
+     history.start(timestamp);
+     history.request_stop = false;
+  };
+  auto finalize_history_update = [timestamp](history_t& history) {
+    // stop requests for histories that just got started are no-ops
+    if (history.request_stop) {
+      history.stop(timestamp);
+    }
+    history.request_stop = true;
+  };
   for (auto flow : m_affected_flows) {
     assert(stack.empty());
     auto &history_vec = m_reach_summary.history_vec(flow->id);
     auto &rule_ref_per_source = flow->data;
+    auto& path_history = m_path_preference_summary.path_history(flow);
     for (auto &kv : rule_ref_per_source) {
       assert(stack.empty());
-      auto start = kv.first;
-      auto base_index = m_reach_summary.number_of_nodes * start;
-      stack.push_back(start);
+      auto s = kv.first;
+      auto base_index = m_reach_summary.number_of_nodes * s;
+      stack.push_back(s);
       while (not stack.empty()) {
         auto n = stack.back();
         stack.pop_back();
+        path.push_back(n);
         auto rule_ref_per_source_iter = rule_ref_per_source.find(n);
         if (rule_ref_per_source_iter == rule_ref_per_source.end()) {
           continue;
         }
         auto rule_ref = rule_ref_per_source_iter->second;
+        if (rule_ref->target.size() > 1) {
+          std::cerr << "Error: multicast currently unsupported\n";
+          std::exit(ERROR_MULTICAST_PATH_PREFERENCE_UNSUPPORTED);
+        }
         for (auto t : rule_ref->target) {
           auto index = base_index + t;
           assert(index < history_vec.size());
@@ -354,20 +478,29 @@ void analysis_t::update_reach_summary(timestamp_t timestamp) {
             continue;
           }
           auto &history = history_vec[index];
-          history.start(timestamp);
-          history.request_stop = false;
+          prepare_history_update(history);
           bitset.set(t);
           stack.push_back(t);
         }
       }
+      assert(not path.empty());
+      {
+        auto iter = path_history.lower_bound(path);
+        if (iter != path_history.end() and not path_history.key_comp()(path, iter->first)) {
+          prepare_history_update(iter->second);
+        } else {
+          auto spans = spans_t({m_reach_summary.spans.back()});
+          path_history.emplace_hint(iter, path, history_t(spans));
+        }
+      }
+      path.clear();
       bitset.reset();
     }
     for (auto &history : history_vec) {
-      // stop requests for histories that just got started are no-ops
-      if (history.request_stop) {
-        history.stop(timestamp);
-      }
-      history.request_stop = true;
+      finalize_history_update(history);
+    }
+    for (auto &kv : path_history) {
+      finalize_history_update(kv.second);
     }
   }
 }

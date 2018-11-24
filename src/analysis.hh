@@ -47,6 +47,7 @@ typedef float rank_t;
 typedef std::vector<rank_t> ranks_t;
 
 enum error_t : uint8_t {
+  ERROR_MULTICAST_PATH_PREFERENCE_UNSUPPORTED = 1
 };
 
 /// A sliced, sliding time window
@@ -145,15 +146,89 @@ private:
   }
 };
 
+/// A simple path in a directed graph
+typedef std::vector<nid_t> path_t;
+
+struct path_preference_t {
+  flow_id_t flow_id;
+  path_t x_path, y_path;
+  rank_t rank;
+  path_preference_t(flow_id_t f, path_t px, path_t py, rank_t r)
+  : flow_id(f), x_path(px), y_path(py), rank(r) {}
+
+  path_preference_t() : flow_id{0}, x_path{}, y_path{}, rank{0} {}
+  path_preference_t(const path_preference_t &) = delete;
+  // Cannot emplace struct into vector, see defect LWG #2089
+  path_preference_t(path_preference_t &&) = default;
+  path_preference_t& operator=(const path_preference_t &) = delete;
+};
+
+/// Start/stop information per path
+typedef std::map<path_t, history_t> path_history_t;
+
+/// Start/stop information per route (i.e., path + flow)
+typedef std::vector<path_history_t> route_history_t;
+
+/// Non-transitive preference relation measured by rank
+typedef std::vector<path_preference_t> path_preferences_t;
+
+/// Timestamps for each path in the network topology
+typedef std::map<path_t, timestamps_t> path_timestamps_t;
+
+/// Timestamps for each route (i.e., path + flow)
+typedef std::vector<path_timestamps_t> route_timestamps_t;
+
+class path_preference_summary_t {
+public:
+  timestamp_t global_stop = 0;
+
+  path_preference_summary_t(const spans_t &spans, std::size_t number_of_nodes)
+      : m_number_of_nodes{number_of_nodes}
+      , m_link_history_vec(number_of_nodes * number_of_nodes,
+          history_t(spans.empty() ? spans_t() : spans_t({spans.back()}))) {
+    // Pick the longest span, since path preferences rely only on timestamps
+    assert(std::is_sorted(spans.begin(), spans.end()));
+  }
+
+  path_history_t& path_history(const_flow_t flow) {
+    if (flow->id >= m_route_history.size()) {
+      m_route_history.resize((flow->id + 1) << 1);
+    }
+    assert(flow->id < m_route_history.size());
+    return m_route_history[flow->id];
+  }
+
+  void link_up(nid_t source, nid_t target, timestamp_t);
+  void link_down(nid_t source, nid_t target, timestamp_t);
+
+  path_preferences_t path_preferences() const;
+
+  /// \internal Use for testing only
+  route_timestamps_t get_route_timestamps() const;
+
+  /// \internal Use for testing only
+  path_timestamps_t get_path_timestamps() const;
+private:
+  const std::size_t m_number_of_nodes;
+  history_vec_t m_link_history_vec;
+  route_history_t m_route_history;
+
+  inline std::size_t make_index(nid_t s, nid_t t) const {
+    return m_number_of_nodes * s + t;
+  }
+};
+
 class analysis_t {
 public:
   constexpr static std::size_t MAX_NUMBER_OF_NODES = 4096;
 
   analysis_t(std::size_t number_of_nodes)
-      : m_reach_summary{spans_t{}, number_of_nodes} {}
+      : m_reach_summary{spans_t{}, number_of_nodes}
+      , m_path_preference_summary{spans_t{}, number_of_nodes} {}
 
   analysis_t(const spans_t &spans, std::size_t number_of_nodes)
-      : m_reach_summary{spans, number_of_nodes} {}
+      : m_reach_summary{spans, number_of_nodes}
+      , m_path_preference_summary{spans, number_of_nodes} {}
 
   /// Returns true when a new rule has been created; false otherwise
   bool insert_or_assign(const ip_prefix_t &, source_t, const target_t &,
@@ -161,6 +236,9 @@ public:
 
   /// Returns true if the rule existed; false otherwise
   bool erase(const ip_prefix_t &, source_t, timestamp_t current = 0);
+
+  void link_up(nid_t source, nid_t target, timestamp_t);
+  void link_down(nid_t source, nid_t target, timestamp_t);
 
   bool ok() const noexcept { return m_loops_per_flow.empty(); }
 
@@ -174,6 +252,15 @@ public:
 
   const reach_summary_t &reach_summary() const noexcept {
     return m_reach_summary;
+  }
+
+  path_preferences_t path_preferences() const noexcept {
+    return m_path_preference_summary.path_preferences();
+  }
+
+  /// \internal Use for testing only
+  const path_preference_summary_t &path_preference_summary() const noexcept {
+    return m_path_preference_summary;
   }
 
   const loops_per_flow_t &loops_per_flow() const noexcept {
@@ -192,6 +279,7 @@ private:
   affected_flows_t m_affected_flows;
   loops_per_flow_t m_loops_per_flow;
   reach_summary_t m_reach_summary;
+  path_preference_summary_t m_path_preference_summary;
 };
 
 timestamps_t intersect(const timestamps_t &, const timestamps_t &);

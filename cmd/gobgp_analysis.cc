@@ -76,6 +76,9 @@ private:
   void print_reach_summary(writer_t &, const nopticon::const_flow_t,
                              const nopticon::reach_summary_t &) const;
 
+  void print_path_preferences(writer_t &, const nopticon::flow_tree_t &,
+                             const nopticon::path_preferences_t &) const;
+
   void print_nid(writer_t &, nopticon::nid_t) const;
 
   std::ostream m_ostream;
@@ -263,6 +266,42 @@ void log_t::print_reach_summary(
   writer.EndArray();
 }
 
+void log_t::print_path_preferences(
+    writer_t &writer, const nopticon::flow_tree_t &flow_tree,
+    const nopticon::path_preferences_t &path_preferences) const {
+  std::unordered_map<nopticon::flow_id_t, nopticon::const_flow_t> flow_map;
+  {
+    auto flow_tree_iter = flow_tree.iter();
+    do {
+      auto flow = flow_tree_iter.ptr();
+      flow_map.emplace(flow->id, flow);
+    } while (flow_tree_iter.next());
+  }
+  writer.Key("path-preferences");
+  writer.StartArray();
+  for (auto& record : path_preferences) {
+    writer.StartObject();
+    writer.Key("flow");
+    auto flow = flow_map.at(record.flow_id);
+    writer.String(ipv4_format(flow->ip_prefix));
+    writer.Key("x-path");
+    writer.StartArray();
+    for (auto nid : record.x_path) {
+      print_nid(writer, nid);
+    }
+    writer.EndArray();
+    writer.Key("y-path");
+    writer.StartArray();
+    for (auto nid : record.y_path) {
+      print_nid(writer, nid);
+    }
+    writer.EndArray();
+    writer.Key("rank");
+    writer.Double(record.rank);
+  }
+  writer.EndArray();
+}
+
 void log_t::print_errors(
     writer_t &writer, const nopticon::loops_per_flow_t &loops_per_flow) const {
   bool is_empty = true;
@@ -313,6 +352,10 @@ void log_t::print(const nopticon::analysis_t &analysis) {
       writer.EndObject();
     }
     writer.EndArray();
+  }
+  if (m_opt_verbosity >= 9) {
+    print_path_preferences(writer, analysis.flow_graph().flow_tree(),
+                             analysis.path_preferences());
   }
   if (not m_opt_reach_summary_spans.empty()) {
     if (m_opt_verbosity >= 7) {
@@ -417,15 +460,17 @@ void process_cmd(nopticon::analysis_t &analysis, log_t &log,
   auto cmd = static_cast<cmd_t>(opcode);
   switch (cmd) {
   case cmd_t::PRINT_LOG:
-    highest_verbosity = 8;
+    highest_verbosity = 9;
     std::swap(log.m_opt_verbosity, highest_verbosity);
     log.print(analysis);
     std::swap(log.m_opt_verbosity, highest_verbosity);
     break;
   case cmd_t::RESET_NETWORK_SUMMARY:
+    assert(false and "Reset network summary feature is disabled in this branch");
     analysis.reset_reach_summary();
     break;
   case cmd_t::REFRESH_NETWORK_SUMMARY:
+    assert(false and "Refresh network summary feature is disabled in this branch");
     assert(document["Command"].HasMember("Timestamp"));
     if (document["Command"]["Timestamp"].IsUint64()) {
         // Convert time in seconds to time in milliseconds
@@ -466,7 +511,7 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
 
     auto &header = document["Header"];
     auto header_type = header["Type"].GetInt();
-    if (header_type != 0) {
+    if (header_type != 0 and header_type != 2 and header_type != 3) {
       continue;
     }
 
@@ -474,17 +519,9 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
     assert(document["PeerHeader"].HasMember("PeerBGPID"));
     assert(document["PeerHeader"].HasMember("Timestamp"));
     assert(document.HasMember("Body"));
-    assert(document["Body"].HasMember("BGPUpdate"));
-    assert(document["Body"]["BGPUpdate"].HasMember("Body"));
-    assert(document["Body"]["BGPUpdate"]["Body"].HasMember("PathAttributes"));
-    assert(document["Body"]["BGPUpdate"]["Body"]["PathAttributes"].IsArray());
-    assert(document["Body"]["BGPUpdate"]["Body"].HasMember("NLRI"));
-    assert(document["Body"]["BGPUpdate"]["Body"]["NLRI"].IsArray());
-    assert(document["Body"]["BGPUpdate"]["Body"].HasMember("WithdrawnRoutes"));
-    assert(document["Body"]["BGPUpdate"]["Body"]["WithdrawnRoutes"].IsArray());
-
     auto &peer_header = document["PeerHeader"];
-    auto peer_bgpid = peer_header["PeerBGPID"].GetString();
+    auto &body = document["Body"];
+    const auto source = ip_to_nid.at(peer_header["PeerBGPID"].GetString());
     nopticon::timestamp_t timestamp;
     if (peer_header["Timestamp"].IsUint64()) {
       // Convert time in seconds and to time in milliseconds
@@ -495,40 +532,57 @@ void process_bmp_message(std::size_t number_of_nodes, FILE *file,
       timestamp = static_cast<nopticon::timestamp_t>(
           peer_header["Timestamp"].GetDouble() * MILLISECONDS_PER_SECOND);
     }
-    auto &body = document["Body"];
-    auto &bgp_update = body["BGPUpdate"];
-    auto &bgp_update_body = bgp_update["Body"];
-    auto &path_attributes = bgp_update_body["PathAttributes"];
-    std::string next_hop, ip_prefix;
-    for (auto &path_attribute : path_attributes.GetArray()) {
-      assert(path_attribute.HasMember("type"));
-      assert(path_attribute["type"].IsUint());
-      auto path_attribute_type = path_attribute["type"].GetUint();
-      if (path_attribute_type != 3) {
-        continue;
+    if (header_type == 0) {
+      assert(document["Body"].HasMember("BGPUpdate"));
+      assert(document["Body"]["BGPUpdate"].HasMember("Body"));
+      assert(document["Body"]["BGPUpdate"]["Body"].HasMember("PathAttributes"));
+      assert(document["Body"]["BGPUpdate"]["Body"]["PathAttributes"].IsArray());
+      assert(document["Body"]["BGPUpdate"]["Body"].HasMember("NLRI"));
+      assert(document["Body"]["BGPUpdate"]["Body"]["NLRI"].IsArray());
+      assert(document["Body"]["BGPUpdate"]["Body"].HasMember("WithdrawnRoutes"));
+      assert(document["Body"]["BGPUpdate"]["Body"]["WithdrawnRoutes"].IsArray());
+
+      auto &bgp_update = body["BGPUpdate"];
+      auto &bgp_update_body = bgp_update["Body"];
+      auto &path_attributes = bgp_update_body["PathAttributes"];
+      std::string next_hop, ip_prefix;
+      for (auto &path_attribute : path_attributes.GetArray()) {
+        assert(path_attribute.HasMember("type"));
+        assert(path_attribute["type"].IsUint());
+        auto path_attribute_type = path_attribute["type"].GetUint();
+        if (path_attribute_type != 3) {
+          continue;
+        }
+        assert(path_attribute.HasMember("nexthop"));
+        next_hop = path_attribute["nexthop"].GetString();
       }
-      assert(path_attribute.HasMember("nexthop"));
-      next_hop = path_attribute["nexthop"].GetString();
-    }
-    auto &nlri = bgp_update_body["NLRI"];
-    assert(nlri.Empty() == next_hop.empty());
-    auto source = ip_to_nid.at(peer_bgpid);
-    if (next_hop != "0.0.0.0") {
-      for (auto &nlri_value : nlri.GetArray()) {
-        assert(nlri_value.HasMember("prefix"));
-        auto ip_prefix = make_ip_prefix(nlri_value["prefix"].GetString());
-        auto target = ip_to_nid.at(next_hop);
-        analysis.insert_or_assign(ip_prefix, source, {target}, timestamp);
+      auto &nlri = bgp_update_body["NLRI"];
+      assert(nlri.Empty() == next_hop.empty());
+      if (next_hop != "0.0.0.0") {
+        for (auto &nlri_value : nlri.GetArray()) {
+          assert(nlri_value.HasMember("prefix"));
+          auto ip_prefix = make_ip_prefix(nlri_value["prefix"].GetString());
+          auto target = ip_to_nid.at(next_hop);
+          analysis.insert_or_assign(ip_prefix, source, {target}, timestamp);
+          log.print(analysis);
+        }
+      }
+      auto &withdrawn_routes = bgp_update_body["WithdrawnRoutes"];
+      assert(withdrawn_routes.Empty() != next_hop.empty());
+      for (auto &withdrawn_route : withdrawn_routes.GetArray()) {
+        assert(withdrawn_route.HasMember("prefix"));
+        auto ip_prefix = make_ip_prefix(withdrawn_route["prefix"].GetString());
+        analysis.erase(ip_prefix, source, timestamp);
         log.print(analysis);
       }
-    }
-    auto &withdrawn_routes = bgp_update_body["WithdrawnRoutes"];
-    assert(withdrawn_routes.Empty() != next_hop.empty());
-    for (auto &withdrawn_route : withdrawn_routes.GetArray()) {
-      assert(withdrawn_route.HasMember("prefix"));
-      auto ip_prefix = make_ip_prefix(withdrawn_route["prefix"].GetString());
-      analysis.erase(ip_prefix, source, timestamp);
-      log.print(analysis);
+    } else if (body.HasMember("LocalAddress")) {
+      assert(header_type == 2 or header_type == 3);
+      const auto target = ip_to_nid.at(body["LocalAddress"].GetString());
+      if (header_type == 2) {
+        analysis.link_down(source, target, timestamp);
+      } else {
+        analysis.link_up(source, target, timestamp);
+      }
     }
   }
 }
@@ -585,7 +639,8 @@ static const char *const s_usage =
     "  \t6 - ... and information about all flows\n"
     "  \t7 - ... and network summary for all flows\n"
     "  \t    (requires --reach-summary SPANS option)\n"
-    "  \t8 - ... and history of each inferred property\n";
+    "  \t8 - ... and history of each inferred property\n"
+    "  \t9 - ... and path preferences\n";
 
 void print_usage() { std::cerr << s_usage; }
 

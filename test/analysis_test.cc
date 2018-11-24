@@ -6,6 +6,8 @@
 
 #include <analysis.hh>
 
+#include <iostream>
+
 #include <random>
 
 using namespace nopticon;
@@ -440,6 +442,63 @@ static void test_slice_too_small() {
   check_duration(history.slices(), 25);
 }
 
+static void test_path_preference_inference() {
+  const ip_addr_t a{0}, b{1}, c{2}, d{3};
+  spans_t spans;
+  spans.push_back(20);
+
+  analysis_t analysis{spans, 4};
+
+  analysis.link_up(a, b, 1);
+  analysis.link_down(a, b, 3);
+
+  analysis.link_up(a, b, 6);
+  analysis.link_down(a, b, 9);
+
+  analysis.link_up(a, c, 1);
+  analysis.link_down(a, c, 5);
+
+  analysis.link_up(a, c, 7);
+  analysis.link_down(a, c, 8);
+
+  analysis.link_up(b, c, 1);
+  analysis.link_down(b, c, 8);
+
+  analysis.link_up(c, d, 2);
+  analysis.link_down(c, d, 5);
+
+  analysis.link_up(c, d, 6);
+  analysis.link_down(c, d, 9);
+
+  analysis.insert_or_assign(ip_prefix_64_127, a, {c}, 1);
+  analysis.insert_or_assign(ip_prefix_64_127, c, {d}, 1);
+  analysis.erase(ip_prefix_64_127, a, 9);
+
+  analysis.insert_or_assign(ip_prefix_0_15, a, {b}, 2);
+  analysis.insert_or_assign(ip_prefix_0_15, b, {c}, 2);
+  analysis.insert_or_assign(ip_prefix_0_15, c, {d}, 2);
+  analysis.insert_or_assign(ip_prefix_0_15, a, {c}, 3);
+  analysis.insert_or_assign(ip_prefix_0_15, a, {b}, 6);
+  analysis.erase(ip_prefix_0_15, a, 8);
+
+  auto path_timestamps = analysis.path_preference_summary().get_path_timestamps();
+  assert(path_timestamps[path_t({a, b})] == timestamps_t({1, 3, 6, 9}));
+  assert(path_timestamps[path_t({a, c})] == timestamps_t({1, 5, 7, 8}));
+  assert(path_timestamps[path_t({b, c})] == timestamps_t({1, 8}));
+  assert(path_timestamps[path_t({c, d})] == timestamps_t({2, 5, 6, 9}));
+  assert(path_timestamps[path_t({a, b, c})] == timestamps_t({1, 3, 6, 8}));
+  assert(path_timestamps[path_t({a, c, d})] == timestamps_t({2, 5, 7, 8}));
+  assert(path_timestamps[path_t({a, b, c, d})] == timestamps_t({2, 3, 6, 8}));
+
+  auto path_preferences = analysis.path_preferences();
+  assert(path_preferences.size() == 1);
+  auto& record = path_preferences.front();
+  assert(record.x_path == path_t({0, 1, 2, 3}));
+  assert(record.y_path == path_t({0, 2, 3}));
+  assert(record.rank >= 0.999);
+  assert(record.rank <= 1.0);
+}
+
 void run_analysis_test() {
   test_slice_too_small();
   test_reach_summary();
@@ -449,4 +508,5 @@ void run_analysis_test() {
   test_analysis();
   test_refresh();
   test_intersection_of_timestamps();
+  test_path_preference_inference();
 }
