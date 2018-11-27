@@ -20,6 +20,9 @@ def main():
     arg_parser.add_argument('-peerchange', dest='peerchange',
             action='store_true', 
             help='Print and reset network summary on every peer up/down event')
+    arg_parser.add_argument('-end', dest='end',
+            action='store_true',
+            help='Print network summary at end of message stream')
     settings = arg_parser.parse_args()
 
     # Load rdns
@@ -77,6 +80,9 @@ def main():
                 refresh = nopticon.Command.refresh_summary(bmp_msg._timestamp)
                 ostream.write(refresh.json()+'\n')
         ostream.write(bmp_json)
+
+    if (settings.end):
+        ostream.write(nopticon.Command.print_log().json()+'\n')
 
     # Close input and output streams
     istream.close()
