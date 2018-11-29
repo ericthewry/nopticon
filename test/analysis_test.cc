@@ -499,6 +499,22 @@ static void test_path_preference_inference() {
   assert(record.rank <= 1.0);
 }
 
+static void test_path_preference_with_link_events() {
+  const std::size_t number_of_nodes = 3;
+  const ip_addr_t a{0}, b{1}, c{2};
+  const ip_prefix_t ip_prefix = ip_prefix_64_127;
+
+  spans_t spans;
+  spans.push_back(900000);
+  analysis_t analysis{spans, number_of_nodes};
+  analysis.link_up(a, b, 383548);
+  analysis.insert_or_assign(ip_prefix, a, {b}, 383550);
+  analysis.insert_or_assign(ip_prefix, c, {a}, 417835);
+  analysis.link_up(c, a, 739192);
+  auto path_preferences = analysis.path_preferences();
+  assert(path_preferences.empty());
+}
+
 void run_analysis_test() {
   test_slice_too_small();
   test_reach_summary();
@@ -509,4 +525,5 @@ void run_analysis_test() {
   test_refresh();
   test_intersection_of_timestamps();
   test_path_preference_inference();
+  test_path_preference_with_link_events();
 }
