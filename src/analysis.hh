@@ -274,6 +274,7 @@ public:
 private:
   void clean_up();
   void update_reach_summary(timestamp_t);
+  void update_global_timestamps(timestamp_t);
 
   flow_graph_t m_flow_graph;
   affected_flows_t m_affected_flows;

@@ -123,6 +123,7 @@ timestamps_t history_t::timestamps(timestamp_t global_end) const noexcept {
     }
   }
   if (vec.size() & 1) {
+    assert(vec.back() <= global_end);
     vec.push_back(global_end);
   }
   return vec;
@@ -248,9 +249,9 @@ path_timestamps_t path_preference_summary_t::get_path_timestamps() const {
       if (result.find(path) != result.end()) {
         continue;
       }
-      auto timestamps = link_timestamps(path[0], path[1]);
+      auto timestamps = link_timestamps(path.at(0), path.at(1));
       for (std::size_t i = 1; not timestamps.empty() and i + 1 < path.size(); ++i) {
-         auto next_timestamps = link_timestamps(path[i], path[i + 1]);
+         auto next_timestamps = link_timestamps(path.at(i), path.at(i + 1));
          timestamps = intersect(timestamps, next_timestamps);
       }
       if (not timestamps.empty()) {
@@ -390,10 +391,12 @@ bool check_loop(const_flow_t flow, const loop_t &loop) {
 }
 
 void analysis_t::link_up(nid_t s, nid_t t, timestamp_t timestamp) {
+  update_global_timestamps(timestamp);
   m_path_preference_summary.link_up(s, t, timestamp);
 }
 
 void analysis_t::link_down(nid_t s, nid_t t, timestamp_t timestamp) {
+  update_global_timestamps(timestamp);
   m_path_preference_summary.link_down(s, t, timestamp);
 }
 
@@ -417,16 +420,7 @@ void analysis_t::clean_up() {
   }
 }
 
-void analysis_t::update_reach_summary(timestamp_t timestamp) {
-  if (m_reach_summary.spans.empty()) {
-    return;
-  }
-
-  path_t path;
-  ip_addr_vec_t stack;
-  std::bitset<MAX_NUMBER_OF_NODES> bitset;
-  stack.reserve(m_reach_summary.number_of_nodes);
-
+void analysis_t::update_global_timestamps(timestamp_t timestamp) {
   if (timestamp < m_reach_summary.global_start) {
     m_reach_summary.global_start = timestamp;
   }
@@ -436,6 +430,18 @@ void analysis_t::update_reach_summary(timestamp_t timestamp) {
   if (m_path_preference_summary.global_stop < timestamp) {
     m_path_preference_summary.global_stop = timestamp;
   }
+}
+
+void analysis_t::update_reach_summary(timestamp_t timestamp) {
+  if (m_reach_summary.spans.empty()) {
+    return;
+  }
+
+  path_t path;
+  ip_addr_vec_t stack;
+  std::bitset<MAX_NUMBER_OF_NODES> bitset;
+  stack.reserve(m_reach_summary.number_of_nodes);
+  update_global_timestamps(timestamp);
 
   auto prepare_history_update = [timestamp](history_t& history) {
      history.start(timestamp);
