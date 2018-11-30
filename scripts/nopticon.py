@@ -20,6 +20,9 @@ class ReachSummary:
                 flow_edges[edge] = edge_details
             self._edges[flow_prefix] = flow_edges
 
+    def get_flows(self):
+        return self._edges.keys()
+
     def get_edges(self, flow):
         if flow not in self._edges:
             return {}
@@ -90,6 +93,9 @@ class ReachabilityPolicy(Policy):
         super().__init__(PolicyType.REACHABILITY, policy_dict)
         self._source = policy_dict['source'][:10]
         self._target = policy_dict['target'][:10]
+
+    def edge(self):
+        return (self._source, self._target)
 
     def __str__(self):
         return '%s %s->%s' % (self._flow, self._source, self._target)
