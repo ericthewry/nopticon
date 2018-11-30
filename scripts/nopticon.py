@@ -100,6 +100,13 @@ class ReachabilityPolicy(Policy):
     def __str__(self):
         return '%s %s->%s' % (self._flow, self._source, self._target)
 
+    def __hash__(self):
+        return hash((self._flow, self._source, self._target))
+
+    def __eq__(self, other):
+        return ((self._flow, self._source, self._target) 
+                == (other._flow, other._source, other._target))
+
 class PathPreferencePolicy(Policy):
     def __init__(self, policy_dict):
         super().__init__(PolicyType.PATH_PREFERENCE, policy_dict)
@@ -107,6 +114,10 @@ class PathPreferencePolicy(Policy):
         for path in self._paths:
             for i in range(0, len(path)):
                 path[i] = path[i][:10]
+
+    def toReachabilityPolicy(self):
+        return ReachabilityPolicy({'flow' : self._flow, 
+            'source' : self._paths[0][0], 'target' : self._paths[0][-1]})
 
     def __str__(self):
         return '%s %s' % (self._flow, 
