@@ -47,10 +47,9 @@ def main():
     policies = nopticon.parse_policies(policies_json)
 
     # Coerce path preference policies to reachability policy
-    for idx in range(0,len(policies)):
-        policy = policies[idx]
+    for idx, policy in enumerate(policies):
         if policy.isType(nopticon.PolicyType.PATH_PREFERENCE):
-            policy[idx] = nopticon.ReachabilityPolicy({'flow' : policy._flow,
+            policies[idx] = nopticon.ReachabilityPolicy({'flow' : policy._flow,
                     'source' : policy._paths[0][0],
                     'target' : policy._paths[0][-1]})
 
