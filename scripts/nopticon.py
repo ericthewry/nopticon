@@ -20,6 +20,9 @@ class ReachSummary:
                 flow_edges[edge] = edge_details
             self._edges[flow_prefix] = flow_edges
 
+    def get_flows(self):
+        return self._edges.keys()
+
     def get_edges(self, flow):
         if flow not in self._edges:
             return {}
@@ -126,8 +129,18 @@ class ReachabilityPolicy(Policy):
         self._source = policy_dict['source'][:10]
         self._target = policy_dict['target'][:10]
 
+    def edge(self):
+        return (self._source, self._target)
+
     def __str__(self):
         return '%s %s->%s' % (self._flow, self._source, self._target)
+
+    def __hash__(self):
+        return hash((self._flow, self._source, self._target))
+
+    def __eq__(self, other):
+        return ((self._flow, self._source, self._target) 
+                == (other._flow, other._source, other._target))
 
 class PathPreferencePolicy(Policy):
     def __init__(self, policy_dict):
@@ -136,6 +149,10 @@ class PathPreferencePolicy(Policy):
         for path in self._paths:
             for i in range(0, len(path)):
                 path[i] = path[i][:10]
+
+    def toReachabilityPolicy(self):
+        return ReachabilityPolicy({'flow' : self._flow, 
+            'source' : self._paths[0][0], 'target' : self._paths[0][-1]})
 
     def __str__(self):
         return '%s %s' % (self._flow, 
