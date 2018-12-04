@@ -123,6 +123,9 @@ class Policy:
     def isType(self, typ):
         return self._type == typ
 
+    def get_flow(self):
+        return self._flow
+
 class ReachabilityPolicy(Policy):
     def __init__(self, policy_dict):
         super().__init__(PolicyType.REACHABILITY, policy_dict)
@@ -146,13 +149,17 @@ class PathPreferencePolicy(Policy):
     def __init__(self, policy_dict):
         super().__init__(PolicyType.PATH_PREFERENCE, policy_dict)
         self._paths = policy_dict['paths']
-        for path in self._paths:
-            for i in range(0, len(path)):
-                path[i] = path[i][:10]
+        for i, path in enumerate(self._paths):
+            for j, node in enumerate(path):
+                path[j] = node[:10]
+            self._paths[i] = tuple(path)
 
     def toReachabilityPolicy(self):
         return ReachabilityPolicy({'flow' : self._flow, 
             'source' : self._paths[0][0], 'target' : self._paths[0][-1]})
+
+    def get_paths(self):
+        return self._paths
 
     def __str__(self):
         return '%s %s' % (self._flow, 
