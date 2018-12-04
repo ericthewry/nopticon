@@ -28,7 +28,8 @@ def main():
     # Load summary
     with open(settings.summary_path, 'r') as sf:
         summary_json = sf.read()
-    summary = nopticon.ReachSummary(summary_json)
+    reach_summary = nopticon.ReachSummary(summary_json)
+    path_summary = nopticon.PathPreferenceSummary(summary_json)
 
     # Load policies
     with open(settings.policies_path, 'r') as pf:
@@ -37,14 +38,14 @@ def main():
 
     for policy in policies:
         if policy.isType(nopticon.PolicyType.REACHABILITY):
-            print('%s %f' % (policy, check_reachability(policy, summary)))
+            print('%s %f' % (policy, check_reachability(policy, reach_summary)))
         elif policy.isType(nopticon.PolicyType.PATH_PREFERENCE):
             # Coerce path preference policy to reachability policy
             reach_policy = nopticon.ReachabilityPolicy({'flow' : policy._flow,
                     'source' : policy._paths[0][0],
                     'target' : policy._paths[0][-1]})
             print('%s (%s) %f' % (policy, reach_policy,
-                    check_reachability(reach_policy, summary)))
+                    check_reachability(reach_policy, reach_summary)))
 
 if __name__ == '__main__':
     main()

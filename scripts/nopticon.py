@@ -33,6 +33,41 @@ class ReachSummary:
     def get_flows(self):
         return self._edges.keys()
 
+class PathPreferenceSummary:
+    def __init__(self, summary_json):
+        self._summary = json.loads(summary_json)
+
+        # Extract comparisons
+        self._comparisons = {}
+        for comparison in self._summary['path-preferences']:
+            flow = ipaddress.ip_network(comparison['flow'])
+            if flow not in self._comparisons:
+                self._comparisons[flow] = {}
+            xPath = tuple(comparison['x-path'])
+            if xPath not in self._comparisons[flow]:
+                self._comparisons[flow][xPath] = {}
+            yPath = tuple(comparison['y-path'])
+            rank = comparison['rank']
+            self._comparisons[flow][xPath][yPath] = rank
+
+    def get_comparisons(self, flow):
+        if flow not in self._comparisons:
+            return {}
+        return self._comparisons[flow]
+
+    def get_comparison_paths(self, flow, path):
+        if path not in self.get_comparisons(flow):
+            return {}
+        return self.get_comparisons(flow)[path]
+
+    def get_comparison_rank(self, flow, xPath, yPath):
+        if yPath not in self.get_comparison_paths(flow, xPath):
+            return None
+        return self.get_comparison_paths(flow, xPath)[yPath]
+
+    def get_flows(self):
+        return self._comparisons.keys()
+
 class CommandType(Enum):
     PRINT_LOG = 0
     RESET_NETWORK_SUMMARY = 1
