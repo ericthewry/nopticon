@@ -20,6 +20,9 @@ class ReachSummary:
                 flow_edges[edge] = edge_details
             self._edges[flow_prefix] = flow_edges
 
+    def get_flows(self):
+        return self._edges.keys()
+
     def get_edges(self, flow):
         if flow not in self._edges:
             return {}
@@ -32,6 +35,41 @@ class ReachSummary:
 
     def get_flows(self):
         return self._edges.keys()
+
+class PathPreferenceSummary:
+    def __init__(self, summary_json):
+        self._summary = json.loads(summary_json)
+
+        # Extract comparisons
+        self._comparisons = {}
+        for comparison in self._summary['path-preferences']:
+            flow = ipaddress.ip_network(comparison['flow'])
+            if flow not in self._comparisons:
+                self._comparisons[flow] = {}
+            xPath = tuple(comparison['x-path'])
+            if xPath not in self._comparisons[flow]:
+                self._comparisons[flow][xPath] = {}
+            yPath = tuple(comparison['y-path'])
+            rank = comparison['rank']
+            self._comparisons[flow][xPath][yPath] = rank
+
+    def get_comparisons(self, flow):
+        if flow not in self._comparisons:
+            return {}
+        return self._comparisons[flow]
+
+    def get_comparison_paths(self, flow, path):
+        if path not in self.get_comparisons(flow):
+            return {}
+        return self.get_comparisons(flow)[path]
+
+    def get_comparison_rank(self, flow, xPath, yPath):
+        if yPath not in self.get_comparison_paths(flow, xPath):
+            return None
+        return self.get_comparison_paths(flow, xPath)[yPath]
+
+    def get_flows(self):
+        return self._comparisons.keys()
 
 class CommandType(Enum):
     PRINT_LOG = 0
@@ -85,22 +123,43 @@ class Policy:
     def isType(self, typ):
         return self._type == typ
 
+    def get_flow(self):
+        return self._flow
+
 class ReachabilityPolicy(Policy):
     def __init__(self, policy_dict):
         super().__init__(PolicyType.REACHABILITY, policy_dict)
         self._source = policy_dict['source'][:10]
         self._target = policy_dict['target'][:10]
 
+    def edge(self):
+        return (self._source, self._target)
+
     def __str__(self):
         return '%s %s->%s' % (self._flow, self._source, self._target)
+
+    def __hash__(self):
+        return hash((self._flow, self._source, self._target))
+
+    def __eq__(self, other):
+        return ((self._flow, self._source, self._target) 
+                == (other._flow, other._source, other._target))
 
 class PathPreferencePolicy(Policy):
     def __init__(self, policy_dict):
         super().__init__(PolicyType.PATH_PREFERENCE, policy_dict)
         self._paths = policy_dict['paths']
-        for path in self._paths:
-            for i in range(0, len(path)):
-                path[i] = path[i][:10]
+        for i, path in enumerate(self._paths):
+            for j, node in enumerate(path):
+                path[j] = node[:10]
+            self._paths[i] = tuple(path)
+
+    def toReachabilityPolicy(self):
+        return ReachabilityPolicy({'flow' : self._flow, 
+            'source' : self._paths[0][0], 'target' : self._paths[0][-1]})
+
+    def get_paths(self):
+        return self._paths
 
     def __str__(self):
         return '%s %s' % (self._flow, 
