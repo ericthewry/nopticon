@@ -29,6 +29,17 @@ class ReachSummary:
             return {}
         return self._edges[flow]
 
+    def mark_edge_implied_by(self, flow, premise, conclusion):
+        if conclusion in self.get_edges(flow):
+            # the conclusion is implied by EACH if the contents of the implied_by list
+            if 'implied_by' is in self.get_edges(flow)[conclusion]:
+                self.get_edges(flow)[conclusion]['implied_by'].append(list(premise))
+            else:
+                self.get_edges(flow)[conclusion]['implied_by'] = [list(premise)]
+            return True
+        else:
+            return False
+    
     def get_edge_rank(self, flow, edge):
         if edge not in self.get_edges(flow):
             return None
