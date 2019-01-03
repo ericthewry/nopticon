@@ -76,21 +76,38 @@ def main():
 
     # Check for extra edges
     if (settings.extras):
-        # Get all edges in policies
+        # Get all edges and paths in policies
         policy_edges = {}
+        policy_paths = {}
         for policy in policies:
             if policy.isType(nopticon.PolicyType.REACHABILITY):
-                if policy._flow not in policy_edges:
-                    policy_edges[policy._flow] = []
-                policy_edges[policy._flow].append(policy.edge())
+                if policy.get_flow() not in policy_edges:
+                    policy_edges[policy.get_flow()] = set()
+                policy_edges[policy.get_flow()].add(policy.edge())
+            elif policy.isType(nopticon.PolicyType.PATH_PREFERENCE):
+                if policy.get_flow() not in policy_paths:
+                    policy_paths[policy.get_flow()] = set()
+                policy_paths[policy.get_flow()].update(set(policy.get_paths()))
 
         # Identify extra edges
         for flow in reach_summary.get_flows():
             for edge in reach_summary.get_edges(flow):
-                if edge not in policy_edges[flow]:
+                if flow not in policy_edges or edge not in policy_edges[flow]:
                     rank_result = get_edge_rank(reach_summary, flow, edge)
                     print('Extra %s %s->%s %f %d %f' % (flow, edge[0], edge[1], 
                         rank_result[0], rank_result[1], rank_result[2]))
+
+        # Identify extra paths
+        for flow in path_summary.get_flows():
+            for xPath in path_summary.get_comparisons(flow):
+                for yPath in path_summary.get_comparison_paths(flow, xPath):
+                    if (xPath not in policy_paths[flow]
+                            or yPath not in policy_paths[flow]):
+                        rank = path_summary.get_comparison_rank(flow, xPath, 
+                                yPath)
+                        print('Extra %s %s > %s %f' % (flow, xPath, yPath, 
+                            rank))
+
 
 if __name__ == '__main__':
     main()
