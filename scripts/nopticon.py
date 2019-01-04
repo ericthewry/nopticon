@@ -21,6 +21,23 @@ class ReachSummary:
                 flow_edges[edge] = edge_details
             self._edges[flow_prefix] = flow_edges
 
+    def to_policy_set(self, show_implied=False, flow_str=None, threshold=0):
+        policies = set()
+        for flow in self.get_flows():
+            if flow_str is not None and str(flow) != flow_str:
+                continue
+            for edge in self.get_edges(flow):
+                is_implied = self.edge_is_implied(flow, edge)
+                rank = self.get_edge_rank(flow,edge)
+                if rank >= threshold:
+                    if (show_implied and is_implied) or not is_implied:
+                        policies.add(ReachabilityPolicy({
+                            'flow' : flow,
+                            'source': edge[0],
+                            'target': edge[1]
+                        }))
+        return policies
+
     def get_flows(self):
         return self._edges.keys()
 
@@ -32,13 +49,24 @@ class ReachSummary:
     def mark_edge_implied_by(self, flow, premise, conclusion):
         if conclusion in self.get_edges(flow):
             # the conclusion is implied by EACH if the contents of the implied_by list
-            if 'implied_by' is in self.get_edges(flow)[conclusion]:
+            if 'implied_by' in self.get_edges(flow)[conclusion]:
                 self.get_edges(flow)[conclusion]['implied_by'].append(list(premise))
             else:
                 self.get_edges(flow)[conclusion]['implied_by'] = [list(premise)]
             return True
         else:
             return False
+
+    def edge_is_implied(self, flow, edge):
+        return edge in self.get_edges(flow)\
+            and 'implied_by' in self.get_edges(flow)[edge]\
+            and len(self.get_edges(flow)[edge]['implied_by']) > 0
+
+    def get_implicators(self, flow, edge):
+        if self.edge_is_implied(flow,edge):
+            return self.get_edges(flow)[edge]['implied_by']
+        else:
+            return []
     
     def get_edge_rank(self, flow, edge):
         if edge not in self.get_edges(flow):
