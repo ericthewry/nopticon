@@ -109,11 +109,11 @@ def main():
         # load policies
         with open(settings.policies_path, 'r') as pf:
             policies_json = pf.read()
-        policies = nopticon.parse_policies(policies_json)
+        policies = parse_policies(policies_json)
     
         # Coerce path preference policies to reachability policy
         for idx, policy in enumerate(policies):
-            if policy.isType(nopticon.PolicyType.PATH_PREFERENCE):
+            if policy.isType(PolicyType.PATH_PREFERENCE):
                 policies[idx] = policy.toReachabilityPolicy()
                 
     reach_str = None
