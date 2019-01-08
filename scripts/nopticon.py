@@ -7,8 +7,9 @@ import ipaddress
 import json
 
 class ReachSummary:
-    def __init__(self, summary_json):
+    def __init__(self, summary_json, sigfigs):
         self._summary = json.loads(summary_json)
+        self._sigfigs = sigfigs
 
         # Extract edges
         self._edges = {}
@@ -31,7 +32,7 @@ class ReachSummary:
     def get_edge_rank(self, flow, edge):
         if edge not in self.get_edges(flow):
             return None
-        return self.get_edges(flow)[edge]['rank-0']
+        return round(self.get_edges(flow)[edge]['rank-0'], self._sigfigs)
 
     def get_flows(self):
         return self._edges.keys()
