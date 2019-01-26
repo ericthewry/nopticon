@@ -482,21 +482,35 @@ static void test_path_preference_inference() {
   analysis.erase(ip_prefix_0_15, a, 8);
 
   auto path_timestamps = analysis.path_preference_summary().get_path_timestamps();
-  assert(path_timestamps[path_t({a, b})] == timestamps_t({1, 3, 6, 9}));
-  assert(path_timestamps[path_t({a, c})] == timestamps_t({1, 5, 7, 8}));
-  assert(path_timestamps[path_t({b, c})] == timestamps_t({1, 8}));
-  assert(path_timestamps[path_t({c, d})] == timestamps_t({2, 5, 6, 9}));
-  assert(path_timestamps[path_t({a, b, c})] == timestamps_t({1, 3, 6, 8}));
   assert(path_timestamps[path_t({a, c, d})] == timestamps_t({2, 5, 7, 8}));
   assert(path_timestamps[path_t({a, b, c, d})] == timestamps_t({2, 3, 6, 8}));
 
   auto path_preferences = analysis.path_preferences();
-  assert(path_preferences.size() == 1);
-  auto& record = path_preferences.front();
-  assert(record.x_path == path_t({0, 1, 2, 3}));
-  assert(record.y_path == path_t({0, 2, 3}));
-  assert(record.rank >= 0.999);
-  assert(record.rank <= 1.0);
+  assert(path_preferences.size() == 3);
+  {
+    auto& record = path_preferences[0];
+    assert(record.x_path == path_t({a, c, d}));
+    assert(record.y_path == path_t({a, b, c, d}));
+    assert(record.flow_id == 1);
+    assert(record.rank >= 0.999);
+    assert(record.rank <= 1.0);
+  }
+  {
+    auto& record = path_preferences[1];
+    assert(record.x_path == path_t({a, b, c, d}));
+    assert(record.y_path == path_t({a, c, d}));
+    assert(record.flow_id == 2);
+    assert(record.rank >= 0.999);
+    assert(record.rank <= 1.0);
+  }
+  {
+    auto& record = path_preferences[2];
+    assert(record.x_path == path_t({a, c, d}));
+    assert(record.y_path == path_t({a, b, c, d}));
+    assert(record.flow_id == 2);
+    assert(record.rank >= 0);
+    assert(record.rank <= 0.001);
+  }
 }
 
 static void test_path_preference_with_link_events() {

@@ -271,7 +271,8 @@ route_timestamps_t path_preference_summary_t::get_route_timestamps() const {
     for (auto& kv : path_history) {
       auto& path = kv.first;
       auto& history = kv.second;
-      auto result = path_timestamps.emplace(path, history.timestamps(global_stop));
+      auto ts = history.timestamps(global_stop);
+      auto result = path_timestamps.emplace(path, std::move(ts));
       assert(result.second);
       assert(1 < path.size());
     }
@@ -282,37 +283,61 @@ route_timestamps_t path_preference_summary_t::get_route_timestamps() const {
 path_preferences_t path_preference_summary_t::path_preferences() const {
   constexpr double zero_div_guard = 0.00001;
   path_preferences_t path_preferences;
-  path_timestamps_t y_path_timestamps = get_path_timestamps();
+  path_timestamps_t path_timestamps = get_path_timestamps();
   route_timestamps_t route_timestamps = get_route_timestamps();
   flow_id_t flow_id = 0;
+
+  auto duration = [](const timestamps_t &timestamps) {
+    duration_t dur = 0;
+    for (std::size_t i = 0; i + 1 < timestamps.size(); i += 2) {
+       assert(timestamps[i] <= timestamps[i + 1]);
+       dur += timestamps[i + 1] - timestamps[i];
+    }
+    return dur;
+  };
+
   for (auto& x_path_timestamps : route_timestamps) {
     for (auto& x_kv : x_path_timestamps) {
       auto& x_path = x_kv.first;
-      auto& x_timestamps = x_kv.second;
+      auto& x_path_timestamps = x_kv.second;
       assert(1 < x_path.size());
-      assert(!(x_timestamps.size() & 1));
-      for (auto& y_kv : y_path_timestamps) {
+      assert(!(x_path_timestamps.size() & 1));
+      for (auto& y_kv : path_timestamps) {
         auto& y_path = y_kv.first;
-        auto& y_timestamps = y_kv.second;
+        auto& y_link_timestamps = y_kv.second;
         assert(1 < y_path.size());
-        assert(!(y_timestamps.size() & 1));
+        assert(!(y_link_timestamps.size() & 1));
         if (x_path.front() != y_path.front()
             or x_path.back() != y_path.back()
             or x_path == y_path) {
           continue;
         }
-        auto z_timestamps = intersect(x_timestamps, y_timestamps);
-        if (z_timestamps.empty()) {
+        auto x_link_timestamps_iter = path_timestamps.find(x_path);
+        if (x_link_timestamps_iter == path_timestamps.end()) {
           continue;
         }
-        duration_t z_duration = 0;
-        for (std::size_t i = 0; i + 1 < z_timestamps.size(); i += 2) {
-          assert(z_timestamps[i] <= z_timestamps[i + 1]);
-          z_duration += z_timestamps[i + 1] - z_timestamps[i];
+        auto x_link_timestamps = x_link_timestamps_iter->second;
+
+        auto nominator_timestamps = intersect(x_path_timestamps, y_link_timestamps);
+        if (nominator_timestamps.empty()) {
+          continue;
         }
-        auto z_span = z_timestamps.back() - z_timestamps.front();
-        auto z_rank = z_duration / (z_span + zero_div_guard);
-        path_preferences.emplace_back(flow_id, x_path, y_path, z_rank);
+        // Since path and link histories may be recorded differently (due to BMP),
+        // we intersect with x_link_timestamps, because x_path_timestamps may not
+        // be a subset of x_link_timestamps (again, depending on how BMP works).
+        nominator_timestamps = intersect(nominator_timestamps, x_link_timestamps);
+        if (nominator_timestamps.empty()) {
+          continue;
+        }
+
+        auto denominator_timestamps = intersect(x_link_timestamps, y_link_timestamps);
+        if (denominator_timestamps.empty()) {
+          continue;
+        }
+        duration_t nominator_duration = duration(nominator_timestamps);
+        duration_t denominator_duration = duration(denominator_timestamps);
+        auto rank = nominator_duration / (denominator_duration + zero_div_guard);
+        path_preferences.emplace_back(flow_id, x_path, y_path, rank);
       }
     }
     ++flow_id;
@@ -488,17 +513,18 @@ void analysis_t::update_reach_summary(timestamp_t timestamp) {
           bitset.set(t);
           stack.push_back(t);
         }
-      }
-      assert(not path.empty());
-      {
-        auto iter = path_history.lower_bound(path);
-        if (iter != path_history.end() and not path_history.key_comp()(path, iter->first)) {
-          prepare_history_update(iter->second);
-        } else {
-          auto spans = spans_t({m_reach_summary.spans.back()});
-          path_history.emplace_hint(iter, path, history_t(spans));
+        if (not stack.empty()) {
+          // keep only the longest path for each flow
+          path_history.erase(path);
         }
       }
+      assert(not path.empty());
+      auto iter = path_history.lower_bound(path);
+      if (iter == path_history.end() or path_history.key_comp()(path, iter->first)) {
+        auto spans = spans_t({m_reach_summary.spans.back()});
+        iter = path_history.emplace_hint(iter, path, history_t(spans));
+      }
+      prepare_history_update(iter->second);
       path.clear();
       bitset.reset();
     }
@@ -506,7 +532,8 @@ void analysis_t::update_reach_summary(timestamp_t timestamp) {
       finalize_history_update(history);
     }
     for (auto &kv : path_history) {
-      finalize_history_update(kv.second);
+      auto& history = kv.second;
+      finalize_history_update(history);
     }
   }
 }
