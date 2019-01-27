@@ -7,7 +7,7 @@ import ipaddress
 import json
 
 class ReachSummary:
-    def __init__(self, summary_json, sigfigs):
+    def __init__(self, summary_json, sigfigs=9):
         self._summary = json.loads(summary_json)
         self._sigfigs = sigfigs
 
@@ -38,6 +38,21 @@ class ReachSummary:
                         }))
         return policies
 
+    def is_insight(self,flow, edge, cluster=False, threshold=None, implied=False):
+        if cluster and not self.is_cluster_accepted(flow, edge):
+            return False
+
+        if threshold is not None and not self.is_above_threshold(threshold, flow, edge):
+            return False
+
+        if implied and self.edge_is_implied(flow,edge):
+                return False
+
+        return True
+            
+                
+            
+
     def get_flows(self):
         return self._edges.keys()
 
@@ -46,6 +61,28 @@ class ReachSummary:
             return {}
         return self._edges[flow]
 
+    def get_flowedges(self):
+        return [(f,e)for f in self.get_flows() for e in self.get_edges(f)]
+    
+    def mark_above_threshold(self, t, flow, edge):
+        self.get_edges(flow)[edge]['T'] = t
+
+    def is_above_threshold(self, t, flow, edge):
+        return 'T' in self.get_edges(flow)[edge] and\
+            (t is None or self.get_edges(flow)[edge]['T'] >= t)
+
+    def mark_cluster_accepted(self, flow, edge):
+        self.get_edges(flow)[edge]['C'] = True
+
+    def mark_cluster_unaccepted(self,flow, edge):
+        self.get_edges(flow)[edge]['C'] = False
+
+
+    def is_cluster_accepted(self, flow, edge):
+        edgedata = self.get_edges(flow)[edge]
+        return 'C' in edgedata and edgedata['C']
+    
+    
     def mark_edge_implied_by(self, flow, premise, conclusion):
         if conclusion in self.get_edges(flow):
             # the conclusion is implied by EACH if the contents of the implied_by list
@@ -127,6 +164,9 @@ class Policy:
 
     def isType(self, typ):
         return self._type == typ
+
+    def flow(self):
+        return self._flow
 
 class ReachabilityPolicy(Policy):
     def __init__(self, policy_dict):

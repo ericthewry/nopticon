@@ -1,5 +1,6 @@
 #! /usr/bin/python3
 
+from itertools import combinations
 from nopticon import ReachSummary, PolicyType, parse_policies
 from argparse import ArgumentParser
 
@@ -18,6 +19,13 @@ class Topo:
                 else:
                     self._links[key] = set(val)
 
+    def all_nodes(self):
+        nodes = set(self._links.keys())
+        for valset in self._links.values():
+            nodes = nodes.union(valset)
+        return nodes
+        
+    
     def _normalize(self, src, tgt):
         return (min(src,tgt), max(src,tgt))
                     
@@ -30,7 +38,51 @@ class RestrictedGraph:
         self._reach = reach
         self._topo = topo
         self._threshold = threshold
+
+    def all_node_sets_between(self, source, target):
+        usable_nodes = self._topo.all_nodes().difference(set([source,target]))
+        return combinations(usable_nodes, len(usable_nodes))
+
+    def does_separate(self, nodes, flow, source, target):
+        next_hop = {}
+        for (s,t) in self._reach.get_edges(flow).keys():
+            if self._topo.link_exists(s,t) and round(self._reach.get_edge_rank(flow,(s,t)),2) > 0:
+                if s in next_hop:
+                    next_hop[s].add(t)
+                else:
+                    next_hop[s] = set([t])
+                    
+        seen = set()
+        worklist = [source]
+        while len(worklist) > 0:
+            v = worklist[0]
+            seen.add(v)
+            if v == target:
+                return True
+            worklist += next_hop[v]
+
+        return False
         
+    
+    def separate_all(self, flow, source, target):
+        separators = []
+        for node_set in self.all_node_sets_between(source, target):
+            if self.does_separate(node_set, flow, source, target):
+                separators.append(node_set)
+
+        minimal_separators = []
+        for s in separators:
+            minimal = True
+            for p in separators:
+                if s != p and s.issuperset(p):
+                    minimal = False
+                    break
+            if minimal:
+                minimal_separators.append(s)
+            else:
+                continue
+        return minimal_separators
+
     def separate(self, flow, source, target):
         separator = set()
         edges = self._reach.get_edges(flow)
@@ -63,25 +115,30 @@ class RestrictedGraph:
             
             size = len(reach)
 
-        if str(flow) == "3.0.0.0/24" and source == "leaf3_1" and target == "agg0_1":
-            print(source, target, "separated by:", separator)
-        return separator
+        # if str(flow) == "3.0.0.0/24" and source == "leaf3_1" and target == "agg0_1":
+        #    print(source, target, "separated by:", separator)
+        return [separator]
         
 def mark_implied_properties(reach, topo, threshold):
     g = RestrictedGraph(reach, topo, threshold)
     for flow in reach.get_flows():
         for (s,t) in reach.get_edges(flow):
             if topo.link_exists(s,t) or \
-               reach.get_edge_rank(flow, (s,t)) < threshold:
+               (threshold is not None and reach.get_edge_rank(flow, (s,t)) < threshold):
                 continue
             else:
-                separator = g.separate(flow, s, t)
-                for v in separator:
-                    # if str(flow) == "3.0.0.0/24":
-                    #     print((s,t), "==>", (v,t))
-                    reach.mark_edge_implied_by(flow,
-                                               premise=(s,t),
-                                               conclusion=(v,t))
+                separators = g.separate(flow, s, t)
+                for separator in separators:
+                    if not separator:
+                        continue
+                    for v in separator:
+                        # if str(flow) == "3.0.0.0/24":
+                        #     print((s,t), "==>", (v,t))
+                        reach.mark_edge_implied_by(flow,
+                                                   premise=(s,t),
+                                                   conclusion=(v,t))                
+                    
+                    
 
     
 def main():
@@ -133,7 +190,6 @@ def main():
     topo = Topo(topo_str)
     
     mark_implied_properties(reach_summ, topo, threshold)
-    
     props = reach_summ.to_policy_set(show_implied=settings.include_implied, threshold=threshold)
 
     if settings.policies_path is None:
