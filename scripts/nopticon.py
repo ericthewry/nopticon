@@ -7,8 +7,9 @@ import ipaddress
 import json
 
 class ReachSummary:
-    def __init__(self, summary_json):
+    def __init__(self, summary_json, sigfigs):
         self._summary = json.loads(summary_json)
+        self._sigfigs = sigfigs
 
         # Extract edges
         self._edges = {}
@@ -31,10 +32,35 @@ class ReachSummary:
     def get_edge_rank(self, flow, edge):
         if edge not in self.get_edges(flow):
             return None
-        return self.get_edges(flow)[edge]['rank-0']
+        return round(self.get_edges(flow)[edge]['rank-0'], self._sigfigs)
 
     def get_flows(self):
         return self._edges.keys()
+
+class LinkSummary:
+    def __init__(self, summary_json):
+        self._summary = json.loads(summary_json)
+
+        self._links = {}
+        for flow in self._summary['flows']:
+            flow_prefix = ipaddress.ip_network(flow['flow'])
+            flow_links = {}
+            for link in flow['links']:
+                flow_links[link['source']] = link['target']
+            self._links[flow_prefix] = flow_links
+
+    def get_flows(self):
+        return self._links.keys()
+
+    def get_links(self, flow):
+        if flow not in self._links:
+            return {}
+        return self._links[flow]
+
+    def get_targets(self, flow, source):
+        if source not in self.get_links(flow):
+            return []
+        return self.get_links(flow)[source]
 
 class CommandType(Enum):
     PRINT_LOG = 0
