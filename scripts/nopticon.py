@@ -50,7 +50,19 @@ class ReachSummary:
 
         return True
             
-                
+    def clear(self):
+        for flow,edge in self.get_flowedges():
+            edge_data = self.get_edges(flow)[edge]
+            if 'T' in edge_data:
+                del edge_data['T']
+
+            if 'C' in edge_data:
+                del edge_data['C']
+
+            if 'implied_by' in edge_data:
+                del edge_data['implied_by']
+        return
+            
             
 
     def get_flows(self):

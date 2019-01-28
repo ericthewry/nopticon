@@ -12,6 +12,7 @@ import nopticon
 import implied_properties
 import equivalence as eq
 import numpy as np
+import matplotlib.pyplot as plt
 
 def cluster(summ, agg_classes = None):
     """
@@ -114,15 +115,8 @@ def exp_quality_str(summ, policies, datafile, naive_cluster, agg_cluster, implie
                                                  implied = implied,
                                                  threshold = threshold,
                                                  cluster = naive_cluster or agg_cluster)
-    return "{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format(datafile,
-                                                          agg_cluster,
-                                                          naive_cluster,
-                                                          implied,
-                                                          threshold,
-                                                          precision,
-                                                          recall,
-                                                          accuracy,
-                                                          f1score)
+    return (datafile, agg_cluster, naive_cluster, implied,
+            threshold, precision, recall, accuracy, f1score)
 
 
 def all_pairs(settings):
@@ -131,12 +125,77 @@ def all_pairs(settings):
                 for n in set([settings.do_naive_clustering, False])
                 for a in set([settings.do_agg_clustering, False])
                 for i in set([settings.remove_implied_properties, False])
-                for t in set([settings.threshold, None])]
+                for t in set([settings.threshold])
+                if n != a or (not n and not a)]
     else:
         return [(settings.do_naive_clustering,
                 settings.do_agg_clustering,
                 settings.remove_implied_properties,
                 settings.threshold)]
+
+def write_experiments(to_directory, from_data):
+    naive_cluster = sorted([(prettify_name(df), prec, rec, acc, f1) for df, ag, na, imp, thrsh, prec, rec, acc, f1 in from_data
+                            if na and not ag and not imp], key = lambda x: x[0])
+    agg_cluster = sorted([(prettify_name(df), prec, rec, acc, f1) for df, ag, na, imp, thrsh, prec, rec, acc, f1 in from_data
+                          if ag and not imp], key=lambda x: x[0])
+    remove_consequences = sorted([(prettify_name(df), prec, rec, acc, f1) for df, ag, na, imp, thrsh, prec, rec, acc, f1 in from_data
+                                  if imp and not ag and not na], key=lambda x: x[0])
+    naive_remove = sorted([(prettify_name(df), prec, rec, acc, f1) for df, ag, na, imp, thrsh, prec, rec, acc, f1 in from_data
+                           if na and imp and not ag], key=lambda x: x[0])
+    agg_remove = sorted([(prettify_name(df), prec, rec, acc, f1) for df, ag, na, imp, thrsh, prec, rec, acc, f1 in from_data
+                         if ag and imp], key = lambda x: x[0])
+    
+    plot( directory = to_directory,
+          lines = [naive_cluster, agg_cluster, remove_consequences, naive_remove, agg_remove],
+          names = ["NAI",         "AGG",       "REM",               "NAI_REM",    "AGG_REM"],
+          views =   [(0,1),       (0,2),    (0,3),      (0,4)],
+          y_axes =  ["precision", "recall", "accuracy", "F1-score"])
+
+def prettify_name(name):
+    outputname = ""
+    if "fattree-4" in name:
+        outputname += "F4"
+
+    if "iterate" in name:
+        outputname += "-I"
+        
+    if "16" in name:
+        outputname += "-16"
+    elif "32" in name:
+        outputname += "-32"
+    elif "64" in name:
+        outputname += "-64"
+
+    if "end" in name:
+        outputname += "-E"
+    elif "scenario" in name:
+        outputname += "-S"
+
+    return outputname
+    
+
+    
+def plot(directory, lines, names, views, y_axes, x_axis = "simulation"):
+    assert len(views) == len(y_axes)
+    assert len(lines) == len(names)
+
+    for idx, (x_idx,y_idx) in enumerate(views):
+        plt.figure()
+        y_axis_label = y_axes[idx]
+        for l_idx, line in enumerate(lines):
+            xs = [ p[x_idx] for p in line ]
+            ys = [ p[y_idx] for p in line ]
+            print(names[l_idx], y_axis_label)
+            print(xs)
+            print(ys)
+            plt.plot(xs,ys, label = names[l_idx])
+                     
+        plt.ylabel(y_axis_label)
+        plt.xlabel(x_axis)
+        plt.ylim(0,1)
+        plt.legend()
+        plt.savefig("{}/{}-{}.pdf".format(directory, x_axis, y_axis_label))
+        plt.close('all')
     
 def main():
     parser = ArgumentParser(description="Run experiments on nopticon data for SIGCOMM")
@@ -150,6 +209,7 @@ def main():
                         default=False, help="Setting this flag executes naive clustering")
     parser.add_argument("-t", "--threshold", type=float, default=None, help="Providing this flag runs the experiments after discarding values below t")
     parser.add_argument("-p", "--completionist", action="store_true", default = False, help="setting this flag tests all combinations underneath the provided combination.")
+    parser.add_argument("-V", "--visualize", default=None, help="A directory into which charts are output")
     parser.add_argument("-o", "--outfile", dest="outfile", default=None,
                         help="The output csv file")
 
@@ -160,46 +220,55 @@ def main():
     with open(settings.simulations, 'r') as sim_fp:
         simulations = sim_fp.readlines()
 
-    output = "simulation,agg_clustering,naive_clustering,reduction,threshold,precision,recall,accuracy,f1score\n"
-        
+
+    output = []
     for sim in simulations:
         datafile, topofile, polfile = sim.split(',')
         fwd_summary, topo, policies = (None, None, None)
-        with open(datafile, 'r') as data_fp:
+        with open(datafile.strip(), 'r') as data_fp:
             fwd_summary = nopticon.ReachSummary(data_fp.read(),9)
-        with open(topofile, 'r') as topo_fp:
+        with open(topofile.strip(), 'r') as topo_fp:
             topo = implied_properties.Topo(topo_fp.read())
-        with open(polfile, 'r') as pol_fp:
+        with open(polfile.strip(), 'r') as pol_fp:
             policies = nopticon.parse_policies(pol_fp.read())
         for idx, policy in enumerate(policies):
             if policy.isType(nopticon.PolicyType.PATH_PREFERENCE):
                 policies[idx] = policy.toReachibilityPolicy()
 
-        if settings.threshold is not None:
-            # threshold
-            threshold(fwd_summary, settings.threshold)
 
-        if settings.do_agg_clustering:
-            # do aggregated clustering
-            cluster(fwd_summary, equivalence(fwd_summary, settings.threshold))
-        elif settings.do_naive_clustering:
-            # do naive clustering
-            cluster(fwd_summary)
-
-        if settings.remove_implied_properties:
-            # remove implied properties
-            implied_properties.mark_implied_properties(fwd_summary, topo, settings.threshold)
-            
         # evaluate every result for the collected data
         for naive, agg, imp, thresh in all_pairs(settings):
-            output += exp_quality_str(fwd_summary, policies, datafile, naive, agg, imp, thresh)
-        
+            if thresh is not None:
+                # threshold
+                threshold(fwd_summary, settings.threshold)
+
+            if agg:
+                # do aggregated clustering
+                cluster(fwd_summary, equivalence(fwd_summary, settings.threshold))
+            elif naive:
+                # do naive clustering
+                cluster(fwd_summary)
+
+            if imp:
+                # remove implied properties
+                implied_properties.mark_implied_properties(fwd_summary, topo, settings.threshold)
+            
+            output.append(exp_quality_str(fwd_summary, policies, datafile, naive, agg, imp, thresh))
+
+            fwd_summary.clear()
+
+    if settings.visualize is not None:
+        write_experiments(to_directory=settings.visualize, from_data=output)
+
+    output.append(tuple("simulation,agg_clustering,naive_clustering,reduction,threshold,precision,recall,accuracy,f1score".split(",")))
+
+    output_str = '\n'.join(','.join([str(o) for o in output]))
     if settings.outfile is None:
-        print(output)
+        print(output_str)
     else:
-        with open(settings.outfile, 'w') as out_fp:
+        with open(settings.outfile, 'w+') as out_fp:
             # print to outfile
-            out_fp.write(output)
+            out_fp.write(output_str)
     return
         
 if __name__ == "__main__":
