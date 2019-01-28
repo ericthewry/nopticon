@@ -25,17 +25,24 @@ void history_t::refresh(timestamp_t timestamp) noexcept {
 
 rank_t history_t::rank(const slice_t &slice, timestamp_t global_start,
                        timestamp_t global_stop) const noexcept {
-  constexpr float zero_div_guard = 0.00001;
-  auto duration = slice.duration;
-  assert(global_start <= global_start);
+  constexpr double boost = 0.00001;
+  auto duration = static_cast<double>(slice.duration);
+  assert(global_start <= global_stop);
   // Timestamps of non-empty histories are non-decreasing.
   assert(duration == 0 or oldest_start_time(slice) <= newest_time());
   if (!(m_head & 1) and newest_time() <= global_stop) {
     // We're in 'start' and need to add a missing 'stop'.
-    duration += global_stop - newest_time();
+    duration += global_stop - newest_time() + boost;
   }
-  auto span = std::min(slice.span(), global_stop - global_start);
-  return duration / (span + zero_div_guard);
+  // The duration of a slice exceeds its span in two scenarios:
+  // 1. Slice is open and we close it with a large global_stop time;
+  // 2. Slice has only one start/stop pair whose difference is larger
+  //    than the span of the slice
+  // In both casese, we ensure that the rank of the slice is 1.
+  assert(duration <= (global_stop - global_start) + boost);
+  double span = duration > slice.span() ? duration :
+    std::min(slice.span(), global_stop - global_start);
+  return duration / (span + boost);
 }
 
 void history_t::update_duration(bool is_stop, timestamp_t current) {
@@ -78,20 +85,15 @@ void history_t::update_duration(bool is_stop, timestamp_t current) {
           // unprovable, but something we'd like
           assert(m_time_window.size() <= (1 << 10));
         }
-
-        if (actual_span <= slice.span()) {
+        if (actual_span <= slice.span() or tail + 1 == m_head) {
           break;
         }
         auto oldest_stop = m_time_window.at(index(tail + 1));
         assert(oldest_start <= oldest_stop);
-        d -= oldest_stop - oldest_start;
-        if (tail + 1 == m_head) {
-          std::cerr << "Error: slice is too small\n";
-          std::exit(ERROR_SLICE_TOO_SMALL);
-        }
         tail = index(tail + 2);
+        d -= oldest_stop - oldest_start;
       }
-      assert(actual_span <= slice.span());
+      assert(tail + 1 == m_head or actual_span <= slice.span());
     }
   }
 }
@@ -154,9 +156,13 @@ void reach_summary_t::reset() noexcept {
 }
 
 void reach_summary_t::refresh(timestamp_t timestamp) noexcept {
+  if (global_start < timestamp) {
+    global_start = timestamp;
+  }
   if (global_stop < timestamp) {
     global_stop = timestamp;
   }
+  assert(global_start <= global_stop);
   for (auto &history_vec : m_tensor) {
     for (auto &history : history_vec) {
       history.refresh(timestamp);
@@ -406,13 +412,31 @@ timestamps_t intersect(const timestamps_t &a, const timestamps_t &b) {
   constexpr bool A = 0, B = 1;
   timestamps_t::size_type more_array[] = {a.size(), b.size()};
   timestamps_t::const_iterator iter_array[] = {a.cbegin(), b.cbegin()};
-  timestamp_t low[] = {-1ULL, -1ULL}, high[] = {0ULL, 0ULL};
+  timestamps_t::const_iterator end_array[] = {a.cend(), b.cend()};
+  timestamp_t low[] = {a[0], b[0]}, high[] = {0, 0};
 
-  auto advance = [&](bool index) {
-    auto& _iter = iter_array[index];
-    auto& _more = more_array[index];
-    auto& _low = low[index];
-    auto& _high = high[index];
+  auto fast_forward = [&](bool X) {
+    const auto Y = !X;
+    auto x_end = end_array[X];
+    auto x_iter = std::lower_bound(iter_array[X], x_end, low[Y]);
+    if (x_iter == x_end) {
+      return true;
+    }
+    auto x_distance = std::distance(iter_array[X], x_iter);
+    if (x_distance & 1) {
+      --x_iter;
+      --x_distance;
+    }
+    iter_array[X] = x_iter;
+    more_array[X] -= x_distance;
+    assert(2 <= more_array[X]);
+    return false;
+  };
+  auto advance = [&](bool X) {
+    auto& _iter = iter_array[X];
+    auto& _more = more_array[X];
+    auto& _low = low[X];
+    auto& _high = high[X];
     assert(2 <= _more);
     _more -= 2;
     _low = *(_iter++);
@@ -423,23 +447,42 @@ timestamps_t intersect(const timestamps_t &a, const timestamps_t &b) {
   };
   auto process_both_intervals = [&]() {
     if (low[A] <= high[B] and low[B] <= high[A]) {
-      c.push_back(std::max(low[A], low[B]));
-      c.push_back(std::min(high[A], high[B]));
+      auto _low = std::max(low[A], low[B]);
+      auto _high = std::min(high[A], high[B]);
+      if (not c.empty() and c.back() == _low) {
+        c.back() = _high;
+      } else {
+        c.push_back(_low);
+        c.push_back(_high);
+      }
+      return false;
     }
+    return true;
   };
   while (more_array[A] and more_array[B]) {
     if (high[A] < high[B]) {
+      if (fast_forward(A)) {
+        return c;
+      }
       advance(A);
     } else {
+      if (fast_forward(B)) {
+        return c;
+      }
       advance(B);
     }
     process_both_intervals();
   }
-  for (auto select : {A, B}) {
-    while (more_array[select]) {
-      advance(select);
-      process_both_intervals();
-    }
+  bool X = more_array[B], Y = !X;
+  assert(more_array[Y] == 0);
+  if (more_array[X]) {
+    fast_forward(X);
+    do {
+      advance(X);
+      if (process_both_intervals()) {
+        break;
+      }
+    } while (more_array[X]);
   }
   return c;
 }

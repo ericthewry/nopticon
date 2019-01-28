@@ -6,6 +6,8 @@
 
 #include <analysis.hh>
 
+#include <random>
+
 using namespace nopticon;
 
 static void check_duration(const slices_t &slices, duration_t d) {
@@ -246,20 +248,33 @@ static void test_analysis() {
   analysis.erase(ip_prefix, 3, 19);
   auto &reach_summary = analysis.reach_summary();
   auto &history_3_5 = reach_summary.history(1, 3, 5);
-  assert(history_3_5.slices().size() == 1);
-  assert(history_3_5.slices().front().duration == 18);
+  check_duration(history_3_5.slices(), 18);
   check_rank(reach_summary, history_3_5, 1.0);
 
   auto &history_4_5 = reach_summary.history(1, 4, 5);
-  assert(history_4_5.slices().size() == 1);
-  assert(history_4_5.slices().front().duration == 5);
+  check_duration(history_4_5.slices(), 5);
   check_rank(reach_summary, history_4_5, 5 / static_cast<float>(19 - 1));
 
   auto &history_4_7 = reach_summary.history(1, 4, 7);
-  assert(history_4_7.slices().size() == 1);
-  assert(history_4_7.slices().front().duration == 0);
+  check_duration(history_4_7.slices(), 0);
   check_rank(reach_summary, history_4_7,
              (19 - 7) / static_cast<float>(19 - 1));
+
+  auto &history_2_3 = reach_summary.history(1, 2, 3);
+  analysis.insert_or_assign(ip_prefix, 2, {3}, 13);
+  analysis.erase(ip_prefix, 2, 81);
+  check_duration(history_2_3.slices(), 68);
+  check_rank(reach_summary, history_2_3, 1.0);
+
+  analysis.insert_or_assign(ip_prefix, 2, {3}, 100);
+  analysis.erase(ip_prefix, 2, 153);
+  check_duration(history_2_3.slices(), 53);
+  check_rank(reach_summary, history_2_3, 1.0);
+
+  analysis.insert_or_assign(ip_prefix, 2, {3}, 170);
+  analysis.erase(ip_prefix, 2, 184);
+  check_duration(history_2_3.slices(), 14);
+  check_rank(reach_summary, history_2_3, 14 / 18.0);
 }
 
 static void test_refresh() {
@@ -323,23 +338,163 @@ static void test_refresh() {
   }
 }
 
+static timestamps_t simple_intersect(const timestamps_t &a, const timestamps_t &b) {
+  if (a.empty() or b.empty()) {
+    return {};
+  }
+  assert(std::is_sorted(a.begin(), a.end()));
+  assert(std::is_sorted(b.begin(), b.end()));
+  assert(!(a.size() & 1));
+  assert(!(b.size() & 1));
+  timestamps_t c;
+  c.reserve(std::max(a.size(), b.size()));
+
+  constexpr bool A = 0, B = 1;
+  timestamps_t::size_type more_array[] = {a.size(), b.size()};
+  timestamps_t::const_iterator iter_array[] = {a.cbegin(), b.cbegin()};
+  timestamp_t low[] = {-1ULL, -1ULL}, high[] = {0ULL, 0ULL};
+
+  auto advance = [&](bool index) {
+    auto& _iter = iter_array[index];
+    auto& _more = more_array[index];
+    auto& _low = low[index];
+    auto& _high = high[index];
+    assert(2 <= _more);
+    _more -= 2;
+    _low = *(_iter++);
+    _high = *(_iter++);
+    assert(_low != 0);
+    assert(_high != 0);
+    assert(_low <= _high);
+  };
+  auto process_both_intervals = [&]() {
+    if (low[A] <= high[B] and low[B] <= high[A]) {
+      auto _low = std::max(low[A], low[B]);
+      auto _high = std::min(high[A], high[B]);
+      if (not c.empty() and c.back() == _low) {
+        c.back() = _high;
+      } else {
+        c.push_back(_low);
+        c.push_back(_high);
+      }
+    }
+  };
+  while (more_array[A] and more_array[B]) {
+    if (high[A] < high[B]) {
+      advance(A);
+    } else {
+      advance(B);
+    }
+    process_both_intervals();
+  }
+  const auto X = !more_array[A];
+  while (more_array[X]) {
+    advance(X);
+    process_both_intervals();
+  }
+  return c;
+}
+
 static void test_intersection_of_timestamps() {
   const timestamps_t x{{3, 7}}, y{{5, 9}}, z{{4, 6}};
   assert(intersect(x, y) == timestamps_t({5, 7}));
-  assert(intersect(y, x) == timestamps_t({5, 7}));
   assert(intersect(y, z) == timestamps_t({5, 6}));
-  assert(intersect(z, y) == timestamps_t({5, 6}));
   const timestamps_t u{{1, 3, 5, 8, 9, 15}}, v{{1, 5}}, w{{5, 12}};
   assert(intersect(u, v) == timestamps_t({1, 3, 5, 5}));
-  assert(intersect(v, u) == timestamps_t({1, 3, 5, 5}));
   assert(intersect(u, w) == timestamps_t({5, 8, 9, 12}));
-  assert(intersect(w, u) == timestamps_t({5, 8, 9, 12}));
   const timestamps_t p{{1, 3, 5, 7, 8, 9}}, q{{2, 4, 6, 7}};
   assert(intersect(p, q) == timestamps_t({2, 3, 6, 7}));
-  assert(intersect(q, p) == timestamps_t({2, 3, 6, 7}));
+  const timestamps_t i{{10, 17, 29, 35, 42, 53, 58, 70, 70, 81, 90, 99}};
+  const timestamps_t j{{12, 44, 54, 70, 80, 99}};
+  assert(intersect(i, j) == timestamps_t({12, 17, 29, 35, 42, 44, 58, 70, 80, 81, 90, 99}));
+  assert(intersect(j, i) == intersect(i, j));
+  for (auto a : {x, y, z, u, v, w, p, q}) {
+    for (auto b : {x, y, z, u, v, w, p, q}) {
+      assert(intersect(a, b) == intersect(b, a));
+      for (auto c : {x, y, z, u, v, w, p, q}) {
+        assert(intersect(c, intersect(a, b)) == intersect(intersect(c, a), b));
+      }
+    }
+  }
+  for (unsigned repeat = 0; repeat < 4096; ++repeat) {
+    std::random_device rd;
+    std::mt19937 gen{rd()};
+    std::uniform_int_distribution<unsigned> dis{1, 65536};
+    timestamps_t g, h;
+    g.reserve(4096);
+    h.reserve(4096);
+    for (std::size_t k = 0; k < 4096; ++k) {
+      g.push_back(dis(gen));
+      h.push_back(dis(gen));
+    }
+    std::sort(g.begin(), g.end());
+    std::sort(h.begin(), h.end());
+    assert(intersect(g, h) == simple_intersect(g, h));
+  }
+}
+
+static void test_slice_too_small() {
+  spans_t spans;
+  spans.push_back(20);
+  history_t history{spans, 3};
+
+  //[1,50]
+  history.start(1);
+  history.stop(50);
+  check_duration(history.slices(), 49);
+
+  history.reset();
+
+  //[1,21]
+  history.start(1);
+  history.stop(21);
+  check_duration(history.slices(),20);
+
+  history.reset();
+
+  // [1541089737329,1541089738324,1541089783864,1541089783886]
+  history.start(1541089737329);
+  history.stop(1541089738324);
+  check_duration(history.slices(), 995);
+
+  history.start(1541089783864);
+  history.stop(1541089783886);
+  check_duration(history.slices(), 22);
+
+  history.reset();
+
+  //[1,5,6,21]
+  history.start(1);
+  history.stop(5);
+  history.start(6);
+  history.stop(21);
+  check_duration(history.slices(),19);
+
+  history.reset();
+
+  //[1,5,6,25,26,30]
+  history.start(1);  // [1]
+  history.stop(5);   // [1,5]
+  history.start(6);  // [1,5,6]
+  history.stop(25);  // [1,5,6,25]
+  history.start(26); // [26,5,6,25]
+  history.stop(30);  // [26,30,6,25]
+  check_duration(history.slices(), 4);
+
+  history.reset();
+
+  // [1,5,6,15,20,45]
+  history.start(1);
+  history.stop(5);
+  history.start(6);
+  history.stop(15);
+  history.start(20);
+  history.stop(45);
+  check_duration(history.slices(), 25);
 }
 
 void run_analysis_test() {
+  test_slice_too_small();
   test_reach_summary();
   test_history();
   test_loop();
