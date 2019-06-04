@@ -43,6 +43,7 @@ def main():
 
     # Process input stream
     for bmp_json in istream.readlines():
+        print(bmp_json)
         bmp_msg = bmp.parse_message(bmp_json.strip())
         if (settings.peerchange and
                 (bmp_msg.isPeerUp() or bmp_msg.isPeerDown())): 
