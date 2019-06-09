@@ -17,13 +17,18 @@ class Topo:
                 if key in self._links:
                     self._links[key].add(val)
                 else:
-                    self._links[key] = set(val)
+                    self._links[key] = set([val])
 
     def all_nodes(self):
         nodes = set(self._links.keys())
         for valset in self._links.values():
             nodes = nodes.union(valset)
         return nodes
+
+    def links(self):
+        return set([(s,t)
+                    for s,ts in self._links.items()
+                    for t in ts])
         
     
     def _normalize(self, src, tgt):
@@ -58,10 +63,10 @@ class RestrictedGraph:
             v = worklist[0]
             seen.add(v)
             if v == target:
-                return True
+                return False
             worklist += next_hop[v]
 
-        return False
+        return True
         
     
     def separate_all(self, flow, source, target):
@@ -89,35 +94,96 @@ class RestrictedGraph:
         rank = lambda e: round(self._reach.get_edge_rank(flow,e),2)
         # inferred_edges = {e : d for e : d in edges.items()
         #                   if rank(e) >= self.threshold}
-        physical_edges = {e : d for e, d in edges.items()
-                          if self._topo.link_exists(*e)
-                          if rank(e) > 0}
-        if str(flow) == "3.0.0.0/24" and source == "leaf3_0" and target == "agg0_1":
-            print("Separating", source, "and", target)
-
+        physical_edges = self._topo.links()
+        # if str(flow) == "3.0.0.0/24" and source == "leaf3_0" and target == "agg0_1":
+        #     print("Separating", source, "and", target)
+        # print(physical_edges)
+        
         ## Compute _Close_ Separator Set in physical_edges
         # get successors S of source
-        successors = set([tgt for (src, tgt) in physical_edges.keys()
-                          if src == source])
+        successors = set([tgt for (src, tgt) in physical_edges
+                          if src == source]).union(
+                                  set([tgt for tgt, src in physical_edges
+                                       if src ==source]))
+
+        # print("SUCCESSORS of", source, successors)
+        
         # Compute Set of Nodes R that reach target, (not including those nodes in S)
         reach = set([ target ])
         separator = set()
         old_size = 0
         while len(reach) > old_size:
             old_size = len(reach)
-            for (src, tgt) in physical_edges.keys():
+            for (src, tgt) in physical_edges:
                 if tgt in reach:
                     assert(tgt not in successors)
                     if src in successors:
+                        # print("ADD-SRC", src)
                         separator.add(src)
                     else:
                         reach.add(src)
-            
+                if src in reach:
+                    assert(src not in successors)
+                    if tgt in successors:
+                        # print("ADD-TGT", tgt)
+                        separator.add(tgt)
+                    else:
+                        reach.add(tgt)
+            # print(separator)
             size = len(reach)
 
         # if str(flow) == "3.0.0.0/24" and source == "leaf3_1" and target == "agg0_1":
         #    print(source, target, "separated by:", separator)
         return [separator]
+
+
+    def rec_separate(self,flow, sources, targets):
+        separator = set()
+        edges = self._reach.get_edges(flow)
+        rank = lambda e: round(self._reach.get_edge_rank(flow,e),2)
+        # inferred_edges = {e : d for e : d in edges.items()
+        #                   if rank(e) >= self.threshold}
+        physical_edges = self._topo.links()
+        # if str(flow) == "3.0.0.0/24" and source == "leaf3_0" and target == "agg0_1":
+        #     print("Separating", source, "and", target)
+        # print(physical_edges)
+        
+        ## Compute _Close_ Separator Set in physical_edges
+        # get successors S of source
+        successors = set([tgt for (src, tgt) in physical_edges
+                          if src in sources]).union(
+                                  set([tgt for tgt, src in physical_edges
+                                       if src in sources]))
+
+        if set(targets).issubset(successors):
+            return []
+        # print("SUCCESSORS of", source, successors)
+        
+        # Compute Set of Nodes R that reach target, (not including those nodes in S)
+        reach = set(targets)
+        separator = set()
+        old_size = 0
+        while len(reach) > old_size:
+            old_size = len(reach)
+            for (src, tgt) in physical_edges:
+                if tgt in reach:
+                    assert(tgt not in successors)
+                    if src in successors:
+                        # print("ADD-SRC", src)
+                        separator.add(src)
+                    else:
+                        reach.add(src)
+                if src in reach:
+                    assert(src not in successors)
+                    if tgt in successors:
+                        # print("ADD-TGT", tgt)
+                        separator.add(tgt)
+                    else:
+                        reach.add(tgt)
+            # print(separator)
+            size = len(reach)
+
+        return [separator] + self.rec_separate(flow, separator, targets)
         
 def mark_implied_properties(reach, topo, threshold):
     g = RestrictedGraph(reach, topo, threshold)
@@ -127,25 +193,50 @@ def mark_implied_properties(reach, topo, threshold):
                (threshold is not None and reach.get_edge_rank(flow, (s,t)) < threshold):
                 continue
             else:
-                separators = g.separate(flow, s, t)
+                separators = g.separate(flow, s, t) + g.separate(flow, t, s)
+                used_separators = []
+
+                # if s[:4] == "leaf" and t[:4] == "leaf":
+                #     used_separators.append(set("core" + str(i) for i in range(16)))
+                    
                 for separator in separators:
-                    if not separator:
-                        continue
+                    # if len(separator) <= 1:
+                    #     continue
+
+                    fwd_sep = True
                     for v in separator:
-                        # if str(flow) == "3.0.0.0/24":
-                        #     print((s,t), "==>", (v,t))
+                        if v[:4] == "leaf": 
+                            fwd_sep = False
+                            break
+                        
+                        rankout = reach.get_edge_rank(flow, (v,t))
+                        rankin = reach.get_edge_rank(flow, (s,v))
+                        rankout = -1 if rankout is None else rankout
+                        rankin = -1 if rankin is None else rankin
+                        if rankin <= 0:# and rankout<=0:
+                            fwd_sep = False
+                            break
+
+                    if fwd_sep:
+                        used_separators.append(separator)
+
+                    
+                for separator in used_separators:
+                    # print(s, separator, t)                    
+                    for v in separator:
                         reach.mark_edge_implied_by(flow,
                                                    premise=(s,t),
-                                                   conclusion=(v,t))                
-                    
-                    
+                                                   conclusion=(v,t))
+                        reach.mark_edge_implied_by(flow,
+                                                   premise=(s,t),
+                                                conclusion=(s,v))                    
 
     
 def main():
     parser = ArgumentParser(description="Remove Implied Properties")
     parser.add_argument("summary", help="The file path to a reachability summary")
     parser.add_argument("topo", help="The Topology file for the network from which the `summary` was collected")
-    parser.add_argument("--include-implied", dest="include_implied", action="store_true",
+    parser.add_argument("--include-implied", dest="include_implied", default=False, action="store_true",
                         help="Include the implied properties in the output")
     parser.add_argument("-t", "--threshold", default=50, type=int,
                         help="Threshold (as a percentage); ranks below the threshold are discarded; must be between 0 and 100")
@@ -153,7 +244,7 @@ def main():
                         help="List of expected policies for the `summary`")
     
     settings = parser.parse_args()
-
+ 
     # check threshold has a valid value
     if settings.threshold > 100 or settings.threshold < 0:
         print("ERROR: Value supplied to --threshold must be between 0 and 100. You supplied", settings.threshold)
@@ -166,12 +257,13 @@ def main():
         # load policies
         with open(settings.policies_path, 'r') as pf:
             policies_json = pf.read()
-        policies = parse_policies(policies_json)
+        s_policies = parse_policies(policies_json)
     
         # Coerce path preference policies to reachability policy
-        for idx, policy in enumerate(policies):
+        policies = []
+        for idx, policy in enumerate(s_policies):
             if policy.isType(PolicyType.PATH_PREFERENCE):
-                policies[idx] = policy.toReachabilityPolicy()
+                policies += policy.toReachabilityPolicy()
                 
     reach_str = None
     with open(settings.summary) as reach_fp:
@@ -198,10 +290,15 @@ def main():
     else:
         correct_policies = 0
         for p in props:
-            correct_policies += int(p in policies)
-
+            if p in policies:
+                correct_policies += 1
+            # else:
+            #     print("FP:", p, reach_summ.get_edge_rank(p._flow, (p._source, p._target)))
+                
+            
         print("Precision:", float(correct_policies/len(props)))
         print("Recall:", float(correct_policies/len(policies)))
+
     
 if __name__ == "__main__":    
     main()

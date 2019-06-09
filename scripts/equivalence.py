@@ -10,10 +10,12 @@
 import nopticon
 from argparse import ArgumentParser
 
-def height(succ, node, memo):
+def height(succ, node, memo, gas = 200):
+    if gas == 0:
+        return 0
     if node not in memo:
         if node in succ:
-            memo[node] = 1 + max([height(succ, s, memo) for s in succ[node] ])
+            memo[node] = 1 + max([height(succ, s, memo, gas-1) for s in succ[node]])
         else:
             memo[node] = 0
     return memo[node]
@@ -60,10 +62,7 @@ def compute_flow_NECs(edges):
     nodes = set(adj.keys()).union(set(op_adj.keys()))
     memo = {}
     op_memo = {}
-    if loop_free(adj) and loop_free(op_adj):
-        return { n: (height(adj, n, memo), height(op_adj, n, op_memo)) for n in nodes }
-    else:
-        return { n : -1 for n in nodes}
+    return { n: (height(adj, n, memo), height(op_adj, n, op_memo)) for n in nodes }
     
     
 

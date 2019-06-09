@@ -5,9 +5,45 @@ Python classes for Nopticon
 from enum import Enum
 import ipaddress
 import json
+import matplotlib.pyplot as plt
+
+
+class PrefSummary:
+    def __init__(self, summary_json, sigfigs=9):
+        self._summary=json.loads(summary_json)
+        self._sigfigs = sigfigs
+
+        self._preferences = []
+
+        if 'path-preferences' in self._summary:
+        
+            for pref in self._summary['path-preferences']:
+                if pref['rank'] > 0.5:
+                    self._preferences.append(PathPreferencePolicy({
+                        'flow' : pref['flow'],
+                        'paths' : [
+                            pref['x-path'],
+                            pref['y-path'],
+                        ]
+                    }))
+                else:
+                    # print("DISCARD", PathPreferencePolicy({
+                    #     'flow' : pref['flow'],
+                    #     'paths' : [
+                    #         pref['x-path'],
+                    #         pref['y-path'],
+                    #     ]
+                    # }), pref["rank"])
+                    continue
+
+    def preferences(self):
+        return self._preferences
+
+    def __str__(self):
+        return "\n".join(str(p) for p in preferences)
 
 class ReachSummary:
-    def __init__(self, summary_json, sigfigs=9):
+    def __init__(self, summary_json, sigfigs=9, loc=""):
         self._summary = json.loads(summary_json)
         self._sigfigs = sigfigs
 
@@ -20,6 +56,16 @@ class ReachSummary:
                 edge = (edge_details['source'], edge_details['target'])
                 flow_edges[edge] = edge_details
             self._edges[flow_prefix] = flow_edges
+
+        if len(loc) > 0:
+            rank_distrib = [self.get_edge_rank(f,e) for (f,e) in self.get_flowedges()
+                            if self.get_edge_rank(f,e) > 0.9]
+            plt.figure(figsize=(8,3))
+            plt.hist(rank_distrib)
+            plt.xlim(0.9,1.0)
+            plt.savefig(loc + "-hist.pdf")
+            plt.close('all')
+            
 
     def to_policy_set(self, show_implied=False, flow_str=None, threshold=0):
         policies = set()
@@ -46,7 +92,8 @@ class ReachSummary:
             return False
 
         if implied and self.edge_is_implied(flow,edge):
-                return False
+            # print("IMPLIED:", flow, edge)
+            return False
 
         return True
             
@@ -102,6 +149,7 @@ class ReachSummary:
                 self.get_edges(flow)[conclusion]['implied_by'].append(list(premise))
             else:
                 self.get_edges(flow)[conclusion]['implied_by'] = [list(premise)]
+            # print("\t",premise, "==>", conclusion)
             return True
         else:
             return False
@@ -208,9 +256,57 @@ class PathPreferencePolicy(Policy):
                 path[i] = path[i][:10]
 
     def toReachabilityPolicy(self):
-        return ReachabilityPolicy({'flow' : self._flow, 
-            'source' : self._paths[0][0], 'target' : self._paths[0][-1]})
+        waypoints = set(self._paths[0])
+        for p in self._paths:
+            waypoints = waypoints.intersection(set(p))
 
+        return [ReachabilityPolicy({'flow' : self._flow, 
+                                    'source' : self._paths[0][0], 'target' : self._paths[0][-1]})] # + \
+                                    # [ReachabilityPolicy({'flow' : self._flow, 'source': self._paths[0][0],
+                                    #                      'target': w}) for w in waypoints] + \
+                                    #                     [ReachabilityPolicy({'flow' : self._flow,
+                                    #                                          'source': n,
+                                    #                                          'target': self._paths[0][-1]})
+                                    #                      for n in waypoints ]
+
+    def toImplConsequences(self):
+        return  [ReachabilityPolicy({'flow' : self._flow,
+                                     'source': n,
+                                     'target': m})
+                 for p in self._paths
+                 for i,n in enumerate(p)
+                 for m in p[i+1:]] 
+
+
+
+    def __eq__(self,other):
+        if self._flow != other._flow:
+            return False
+        
+        for pp in self._paths:
+            pp_in_other = False
+            for op in other._paths:
+                if pp == op:
+                    pp_in_other = True
+            if not pp_in_other:
+                return False
+
+        for op in other._paths:
+            op_in_self = False
+            for pp in self._paths:
+                if op == pp:
+                    op_in_self = True
+            if not op_in_self:
+                return False
+
+        return True
+            
+                
+                    
+                
+            
+            
+    
     def __str__(self):
         return '%s %s' % (self._flow, 
                 ' > '.join(['->'.join(path) for path in self._paths]))
